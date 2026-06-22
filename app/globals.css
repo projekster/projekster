@@ -2,34 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 1. Leaflet Premium Overrides - Nu passend bij White Cube */
+/* =========================================
+   LEAFLET PREMIUM OVERRIDES (White Cube)
+   ========================================= */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-  background-color: #ffffff !important; /* Wit zoals de app */
-  color: #0f172a !important; /* Donkergrijs/zwart voor tekst */
-  border: 1px solid #e2e8f0 !important; /* Subtiele rand */
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-  border-radius: 12px !important;
+  background-color: #ffffff !important; /* Helder wit */
+  color: #0f172a !important; /* Diep donkergrijs voor leesbaarheid */
+  border: 1px solid #e2e8f0 !important; /* Zachte slate-200 rand */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important; /* Luxe, zachte schaduw */
+  border-radius: 12px !important; /* Vloeiende hoeken */
 }
 
+/* Verwijder de standaard padding van Leaflet voor een strakker design */
+.leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Zorg dat de typografie van de hele app doorvloeit in de kaart */
 .leaflet-container {
   font-family: inherit !important;
 }
 
+/* Transparante achtergrond voor onze gloeiende custom dots */
 .custom-leaflet-icon {
   background: transparent;
   border: none;
-}
-
-/* 2. Scrollbar cleanup voor een 'strak' gevoel op mobiel */
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* 3. Global focus ring voor toegankelijkheid en premium feel */
-:focus {
-  outline: none;
 }
