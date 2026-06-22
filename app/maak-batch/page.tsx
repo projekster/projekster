@@ -51,6 +51,9 @@ export default function MaakBatch() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // ==========================================
+  // IDENTITEIT CHECK
+  // ==========================================
   useEffect(() => {
     async function checkIdentity() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -98,6 +101,9 @@ export default function MaakBatch() {
     }
   };
 
+  // ==========================================
+  // LOGICA: FOTO PREVIEW
+  // ==========================================
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -107,7 +113,7 @@ export default function MaakBatch() {
   };
 
   // ==========================================
-  // DE INJECTIE (NU INCLUSIEF LAT/LNG)
+  // DE INJECTIE (INCLUSIEF LAT/LNG & STORAGE)
   // ==========================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +126,7 @@ export default function MaakBatch() {
       }
 
       // Als de locatie nog niet vertaald is (bijv. als de gebruiker heel snel op opslaan klikt),
-      // forceren we nog één keer een snelle zoekopdracht.
+      // forceren we nog één keer een snelle zoekopdracht. Hier laten we NOOIT logica vallen.
       let finalLat = lat;
       let finalLng = lng;
       if (!finalLat || !finalLng) {
@@ -134,6 +140,7 @@ export default function MaakBatch() {
 
       let imageUrl = null;
 
+      // Image upload naar Supabase Storage
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
@@ -182,36 +189,36 @@ export default function MaakBatch() {
   };
 
   // ==========================================
-  // LAADSCHERMEN & SUCCES UX
+  // LAADSCHERMEN & SUCCES UX (WHITE CUBE)
   // ==========================================
   if (isAuthChecking) {
     return (
-      <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-amber-500 uppercase tracking-widest font-bold animate-pulse">Sleutels verifiëren...</p>
+      <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-500 uppercase tracking-widest font-bold animate-pulse text-sm">Identiteit verifiëren...</p>
       </main>
     );
   }
 
   if (isSuccess) {
     return (
-      <main className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-900 border border-emerald-900/50 rounded-2xl p-8 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-emerald-400"></div>
-          <div className="w-20 h-20 bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-800">
-            <span className="text-4xl">✨</span>
+      <main className="min-h-[80vh] bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-10 text-center shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
+          <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-inner">
+            <span className="text-5xl">✨</span>
           </div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">Oogst Geregistreerd</h2>
-          <p className="text-slate-400 text-sm mb-8">
-            Jouw batch ligt veilig in de kluis en is gekoppeld aan de geografische radar.
+          <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-3">Oogst Geregistreerd</h2>
+          <p className="text-slate-500 text-sm mb-8 leading-relaxed font-medium">
+            Jouw batch ligt veilig in de kluis en is zojuist gekoppeld aan de geografische radar van Projekster.
           </p>
           <div className="space-y-3">
-            <button onClick={() => router.push('/')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest py-3.5 rounded-lg transition-all shadow-lg">
+            <button onClick={() => router.push('/')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest py-4 rounded-xl transition-all shadow-md">
               Bekijk de Markt
             </button>
             <button onClick={() => { 
               setIsSuccess(false); setTitle(""); setCategory(""); setTotal(""); setPrice(""); setDescription(""); setRules(""); setTradeValue(""); setImageFile(null); setImagePreview(null); setLocation(""); setLat(null); setLng(null); setLocationResolved(null);
-            }} className="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold py-3.5 rounded-lg transition-all">
+            }} className="w-full bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-600 font-bold py-4 rounded-xl transition-all uppercase tracking-widest text-sm shadow-sm">
               Nog een batch aanmaken
             </button>
           </div>
@@ -221,202 +228,205 @@ export default function MaakBatch() {
   }
 
   return (
-    <main className="max-w-[800px] mx-auto px-4 md:px-6 py-10 pb-20">
-      
-      <div className="mb-8">
-        <h1 className="text-3xl font-black tracking-tighter text-white uppercase">Nieuwe Batch Aanmaken</h1>
-        <p className="text-slate-400 flex items-center gap-2 mt-2">
-          <span>🛡️</span> Geverifieerd als: <strong className="text-amber-500">{makerName}</strong>
-        </p>
-      </div>
-
-      {errorMsg && (
-        <div className="mb-6 p-4 rounded-lg bg-red-900/30 text-red-400 border border-red-800 font-medium text-sm flex items-center gap-3">
-          <span>⚠️</span> {errorMsg}
-        </div>
-      )}
-
-      <form className="space-y-8" onSubmit={handleSubmit}>
+    <main className="min-h-screen bg-slate-50 text-slate-900 py-12 pb-24">
+      <div className="max-w-[800px] mx-auto px-4 md:px-6">
         
-        {/* SECTIE 1: DE FUNDERING & FOTO */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
-          <h2 className="text-xl font-bold text-white border-b border-slate-800 pb-4 flex items-center justify-between">
-            1. Wat ga je aanbieden?
-          </h2>
-
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
-              Visueel Bewijs 
-              <span className="text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded text-[10px]">Aanbevolen</span>
-            </label>
-            <div className="w-full relative">
-              {imagePreview ? (
-                <div className="relative w-full h-48 rounded-xl overflow-hidden border border-slate-700 group">
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <label className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors border border-slate-600">
-                      Wijzig Foto
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                    </label>
-                  </div>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-800 border-dashed rounded-xl cursor-pointer bg-slate-950/50 hover:bg-slate-900 hover:border-amber-500/50 transition-all group">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <span className="text-2xl mb-2 opacity-50 group-hover:opacity-100 transition-opacity group-hover:-translate-y-1 transform duration-300">📸</span>
-                    <p className="text-sm text-slate-400 group-hover:text-slate-300"><span className="font-bold text-amber-500">Klik om een foto toe te voegen</span> of sleep bestanden hierheen</p>
-                  </div>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                </label>
-              )}
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Titel van je Batch *</label>
-            <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Bijv. Hooibalen Eerste Snee (Kruidenrijk)" className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
-          </div>
-
-          <div className="space-y-2 pt-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Kies de Hoofdzuil *</label>
-            <div className="grid grid-cols-2 gap-4">
-              <button type="button" onClick={() => { setPillar("voedsel"); setCategory(""); }} className={`p-4 rounded-xl border text-left transition-all ${pillar === "voedsel" ? "bg-amber-600/10 border-amber-500 text-white shadow-inner" : "bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-500"}`}>
-                <span className="block text-xl mb-1">🌾</span><span className="font-bold">De Provisiekast</span>
-              </button>
-              <button type="button" onClick={() => { setPillar("grondstof"); setCategory(""); }} className={`p-4 rounded-xl border text-left transition-all ${pillar === "grondstof" ? "bg-slate-700 border-slate-400 text-white shadow-inner" : "bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-500"}`}>
-                <span className="block text-xl mb-1">🪵</span><span className="font-bold">Het Erf</span>
-              </button>
-            </div>
-          </div>
-
-          {pillar && (
-            <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Specifieke Categorie *</label>
-              <select required value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 appearance-none cursor-pointer">
-                <option value="" disabled>Kies de juiste rubriek...</option>
-                {CATEGORIE_OPTIES[pillar].map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-          )}
+        <div className="mb-10 text-center md:text-left">
+          <h1 className="text-4xl font-black tracking-tighter text-slate-900 uppercase">Nieuwe Batch Aanmaken</h1>
+          <p className="text-slate-500 font-medium flex items-center justify-center md:justify-start gap-2 mt-3 text-sm">
+            <span>🛡️</span> Geverifieerde Maker: <strong className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{makerName}</strong>
+          </p>
         </div>
 
-        {/* SECTIE 2: GEOGRAFIE & CONTEXT */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
-          <h2 className="text-xl font-bold text-white border-b border-slate-800 pb-4">2. Geografie & Afhandeling</h2>
+        {errorMsg && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 text-red-600 border border-red-200 font-medium text-sm flex items-center gap-3 shadow-sm">
+            <span>⚠️</span> {errorMsg}
+          </div>
+        )}
+
+        <form className="space-y-8" onSubmit={handleSubmit}>
           
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex justify-between">
-              Ophaallocatie / Regio *
-            </label>
-            <div className="relative">
-              <input 
-                type="text" 
-                required 
-                value={location} 
-                onChange={(e) => {
-                  setLocation(e.target.value);
-                  setLocationResolved(null);
-                  setLat(null);
-                  setLng(null);
-                }} 
-                onBlur={verifyLocation} // TOP 1% UX: Zoekt automatisch bij het verlaten van het veld
-                placeholder="Bijv. Schagen, Nederland" 
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-4 px-4 pr-12 text-white focus:outline-none focus:border-amber-500 transition-colors" 
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                {isLocating ? (
-                  <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin block"></span>
-                ) : lat && lng ? (
-                  <span className="text-emerald-500 text-lg">✓</span>
+          {/* SECTIE 1: DE FUNDERING & FOTO */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm space-y-8">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4 flex items-center justify-between">
+              1. Wat ga je aanbieden?
+            </h2>
+
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                Visueel Bewijs 
+                <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px]">Aanbevolen</span>
+              </label>
+              <div className="w-full relative">
+                {imagePreview ? (
+                  <div className="relative w-full h-56 rounded-2xl overflow-hidden border border-slate-200 group shadow-inner">
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                      <label className="bg-white hover:bg-slate-50 text-slate-900 text-sm font-bold py-3 px-6 rounded-xl cursor-pointer transition-all shadow-lg flex items-center gap-2">
+                        <span>🔄</span> Wijzig Foto
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                      </label>
+                    </div>
+                  </div>
                 ) : (
-                  <span className="text-slate-600 text-lg">📍</span>
+                  <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-300 border-dashed rounded-2xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-amber-400 transition-all group">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <span className="text-3xl mb-3 opacity-40 group-hover:opacity-100 transition-opacity group-hover:-translate-y-1 transform duration-300">📸</span>
+                      <p className="text-sm text-slate-500 group-hover:text-slate-700 font-medium"><span className="font-bold text-amber-600">Klik om een foto toe te voegen</span> of sleep bestanden hierheen</p>
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  </label>
                 )}
               </div>
             </div>
             
-            {/* Respons-bericht van de Geografische Radar */}
-            {locationResolved && lat && lng && (
-              <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-1 animate-in fade-in">
-                <span>🛰️</span> Radar Lock: {locationResolved}
-              </p>
-            )}
-            {locationResolved && (!lat || !lng) && (
-              <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-1 animate-in fade-in">
-                <span>⚠️</span> {locationResolved}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Beschrijving (Optioneel)</label>
-            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Vertel het verhaal achter de oogst..." className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Spelregels / Ophaalinformatie</label>
-            <textarea rows={2} value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Bijv. Ophalen op zaterdagochtend." className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
-          </div>
-        </div>
-
-        {/* SECTIE 3: VOLUME & PRIJS */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
-          <h2 className="text-xl font-bold text-white border-b border-slate-800 pb-4">3. Volume, Waarde & Looptijd</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Totaal Aantal *</label>
-              <input type="number" required min="1" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="Bijv. 20" className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Titel van je Batch *</label>
+              <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Bijv. Hooibalen Eerste Snee (Kruidenrijk)" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner" />
             </div>
 
-            <div className="md:col-span-7 space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Maateenheid *</label>
-              <select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 appearance-none cursor-pointer">
-                {EENHEDEN.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-
-            <div className="md:col-span-6 space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fiat Waarde (Prijs) *</label>
-              <input type="text" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Bijv. € 5,- p/stuk" className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
-            </div>
-
-            <div className="md:col-span-6 space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Looptijd (Dagen) *</label>
-              <select value={daysLeft} onChange={(e) => setDaysLeft(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 appearance-none cursor-pointer">
-                <option value="7">7 dagen (Korte termijn)</option>
-                <option value="14">14 dagen (Standaard)</option>
-                <option value="30">30 dagen (Lange termijn)</option>
-                <option value="60">60 dagen (Seizoensaanbod)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-slate-800">
-            <div className="flex items-center justify-between cursor-pointer" onClick={() => setAllowsTrade(!allowsTrade)}>
-              <div>
-                <h3 className="text-lg font-bold text-white">Ruilen in Natura toestaan?</h3>
-                <p className="text-sm text-slate-400">Accepteer goederen in plaats van fiat-geld.</p>
-              </div>
-              <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors ${allowsTrade ? "bg-amber-600" : "bg-slate-700"}`}>
-                <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform ${allowsTrade ? "translate-x-6" : ""}`}></div>
+            <div className="space-y-3 pt-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Kies de Hoofdzuil *</label>
+              <div className="grid grid-cols-2 gap-4">
+                <button type="button" onClick={() => { setPillar("voedsel"); setCategory(""); }} className={`p-5 rounded-2xl border-2 text-left transition-all duration-300 ${pillar === "voedsel" ? "bg-amber-50 border-amber-500 text-amber-900 shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"}`}>
+                  <span className="block text-2xl mb-2">🌾</span><span className="font-black tracking-wide">De Provisiekast</span>
+                </button>
+                <button type="button" onClick={() => { setPillar("grondstof"); setCategory(""); }} className={`p-5 rounded-2xl border-2 text-left transition-all duration-300 ${pillar === "grondstof" ? "bg-slate-800 border-slate-900 text-white shadow-sm" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"}`}>
+                  <span className="block text-2xl mb-2">🪵</span><span className="font-black tracking-wide">Het Erf</span>
+                </button>
               </div>
             </div>
-            {allowsTrade && (
-              <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                <label className="text-xs font-bold text-amber-500 uppercase tracking-widest">Wat zoek je in ruil?</label>
-                <input type="text" value={tradeValue} onChange={(e) => setTradeValue(e.target.value)} placeholder="Bijv. Ik zoek voornamelijk brandhout of laswerk" className="w-full bg-slate-950 border border-amber-600/50 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500 transition-colors" />
+
+            {pillar && (
+              <div className="space-y-3 pt-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Specifieke Categorie *</label>
+                <select required value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 appearance-none cursor-pointer shadow-inner">
+                  <option value="" disabled>Kies de juiste rubriek...</option>
+                  {CATEGORIE_OPTIES[pillar].map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
               </div>
             )}
           </div>
-        </div>
 
-        {/* SUBMIT */}
-        <div className="pt-2">
-          <button disabled={isSubmitting} className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 text-white font-black uppercase tracking-widest text-lg py-5 rounded-xl transition-all duration-300 shadow-xl shadow-amber-900/20 flex justify-center items-center">
-            {isSubmitting ? "Data versleutelen en opslaan..." : "Activeer Batch op de Marktplaats"}
-          </button>
-        </div>
+          {/* SECTIE 2: GEOGRAFIE & CONTEXT */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm space-y-8">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4">2. Geografie & Afhandeling</h2>
+            
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex justify-between">
+                Ophaallocatie / Regio *
+              </label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  required 
+                  value={location} 
+                  onChange={(e) => {
+                    setLocation(e.target.value);
+                    setLocationResolved(null);
+                    setLat(null);
+                    setLng(null);
+                  }} 
+                  onBlur={verifyLocation}
+                  placeholder="Bijv. Schagen, Nederland" 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 px-4 pr-12 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner font-medium" 
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  {isLocating ? (
+                    <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin block"></span>
+                  ) : lat && lng ? (
+                    <span className="text-emerald-500 text-lg">✓</span>
+                  ) : (
+                    <span className="text-slate-400 text-lg opacity-50">📍</span>
+                  )}
+                </div>
+              </div>
+              
+              {locationResolved && lat && lng && (
+                <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest mt-2 flex items-center gap-1 animate-in fade-in bg-emerald-50 w-fit px-2 py-1 rounded border border-emerald-100">
+                  <span>🛰️</span> Radar Lock: {locationResolved}
+                </p>
+              )}
+              {locationResolved && (!lat || !lng) && (
+                <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-2 flex items-center gap-1 animate-in fade-in bg-amber-50 w-fit px-2 py-1 rounded border border-amber-100">
+                  <span>⚠️</span> {locationResolved}
+                </p>
+              )}
+            </div>
 
-      </form>
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Beschrijving (Optioneel)</label>
+              <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Vertel het verhaal achter de oogst..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner resize-none" />
+            </div>
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Spelregels / Ophaalinformatie</label>
+              <textarea rows={2} value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Bijv. Ophalen op zaterdagochtend of neem zelf een aanhanger mee." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner resize-none" />
+            </div>
+          </div>
+
+          {/* SECTIE 3: VOLUME & PRIJS */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm space-y-8">
+            <h2 className="text-xl font-black text-slate-900 border-b border-slate-100 pb-4">3. Volume, Waarde & Looptijd</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="md:col-span-5 space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Totaal Aantal *</label>
+                <input type="number" required min="1" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="Bijv. 20" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-black focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner" />
+              </div>
+
+              <div className="md:col-span-7 space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Maateenheid *</label>
+                <select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 appearance-none cursor-pointer shadow-inner">
+                  {EENHEDEN.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+
+              <div className="md:col-span-6 space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fiat Waarde (Prijs) *</label>
+                <input type="text" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Bijv. € 5,- p/stuk" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner" />
+              </div>
+
+              <div className="md:col-span-6 space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Looptijd (Dagen) *</label>
+                <select value={daysLeft} onChange={(e) => setDaysLeft(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 appearance-none cursor-pointer shadow-inner">
+                  <option value="7">7 dagen (Korte termijn)</option>
+                  <option value="14">14 dagen (Standaard)</option>
+                  <option value="30">30 dagen (Lange termijn)</option>
+                  <option value="60">60 dagen (Seizoensaanbod)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-8 border-t border-slate-100">
+              <div className="flex items-center justify-between cursor-pointer group" onClick={() => setAllowsTrade(!allowsTrade)}>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-amber-600 transition-colors">Ruilen in Natura toestaan?</h3>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Accepteer goederen in plaats van fiat-geld.</p>
+                </div>
+                <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border ${allowsTrade ? "bg-amber-500 border-amber-600" : "bg-slate-200 border-slate-300"}`}>
+                  <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${allowsTrade ? "translate-x-6" : ""}`}></div>
+                </div>
+              </div>
+              {allowsTrade && (
+                <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-top-4 duration-300 bg-amber-50/50 p-6 rounded-2xl border border-amber-100">
+                  <label className="text-xs font-black text-amber-700 uppercase tracking-widest flex items-center gap-2"><span>🔄</span> Wat zoek je in ruil?</label>
+                  <input type="text" value={tradeValue} onChange={(e) => setTradeValue(e.target.value)} placeholder="Bijv. Ik zoek voornamelijk brandhout of laswerk" className="w-full bg-white border border-amber-200 rounded-xl p-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-all shadow-sm" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* SUBMIT */}
+          <div className="pt-4">
+            <button disabled={isSubmitting} className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black uppercase tracking-widest text-lg py-5 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1 flex justify-center items-center">
+              {isSubmitting ? (
+                <span className="flex items-center gap-3"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Verwerken...</span>
+              ) : "Activeer Batch op de Marktplaats"}
+            </button>
+          </div>
+
+        </form>
+      </div>
     </main>
   );
 }
