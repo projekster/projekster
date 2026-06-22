@@ -57,13 +57,12 @@ export default function BatchCard({
 
   return (
     <Link href={`/batch/${id}`} className="block group h-full">
-      <div className={`bg-slate-900 border ${isExpired ? 'border-red-900/30 opacity-75 grayscale-[0.5]' : 'border-slate-800 hover:border-amber-500/50'} rounded-2xl overflow-hidden transition-all duration-300 shadow-lg hover:shadow-amber-900/20 flex flex-col h-full relative`}>
+      <div className={`bg-white border ${isExpired ? 'border-red-200 bg-red-50/30 grayscale-[0.3]' : 'border-slate-200 hover:border-amber-300'} rounded-2xl overflow-hidden transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 flex flex-col h-full relative`}>
         
         {/* BOVENKANT: VISUEEL BEWIJS & BADGES */}
-        <div className="h-44 w-full relative bg-slate-950 flex items-center justify-center overflow-hidden">
+        <div className="h-48 w-full relative bg-slate-100 flex items-center justify-center overflow-hidden border-b border-slate-100">
           
           {image_url ? (
-            // De Grote Upgrade: Next.js Image met automatische WebP compressie
             <Image 
               src={image_url} 
               alt={title} 
@@ -72,27 +71,24 @@ export default function BatchCard({
               className={`object-cover transition-transform duration-700 ${isExpired ? '' : 'group-hover:scale-105'}`} 
             />
           ) : (
-            <>
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950"></div>
-              <span className={`text-5xl relative z-10 transition-transform duration-300 drop-shadow-xl ${isExpired ? '' : 'group-hover:scale-110'}`}>
-                {fallbackEmoji}
-              </span>
-            </>
+            <span className={`text-6xl relative z-10 transition-transform duration-300 drop-shadow-sm ${isExpired ? '' : 'group-hover:scale-110'}`}>
+              {fallbackEmoji}
+            </span>
           )}
           
           <div className="absolute top-3 left-3 z-20">
-            <span className="bg-amber-600/90 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-md uppercase tracking-widest shadow-lg">
+            <span className="bg-white/90 backdrop-blur-md text-slate-900 border border-slate-200 text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
               {category}
             </span>
           </div>
 
           <div className="absolute top-3 right-3 z-20">
             {isExpired ? (
-              <span className="bg-red-900/90 backdrop-blur-md border border-red-700 text-red-100 text-[9px] font-bold px-2 py-1.5 rounded-md shadow-lg flex items-center gap-1 animate-pulse">
-                🚨 Verlopen (Wacht op afronding)
+              <span className="bg-red-50/95 backdrop-blur-md border border-red-200 text-red-700 text-[9px] font-black uppercase tracking-widest px-2 py-1.5 rounded-md shadow-sm flex items-center gap-1">
+                🚨 Verlopen
               </span>
             ) : (
-              <span className="bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-300 text-[10px] font-bold px-2 py-1.5 rounded-md shadow-lg flex items-center gap-1">
+              <span className="bg-white/95 backdrop-blur-md border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-widest px-2 py-1.5 rounded-md shadow-sm flex items-center gap-1">
                 ⏳ {actualDaysLeft}d
               </span>
             )}
@@ -101,21 +97,21 @@ export default function BatchCard({
 
         {/* ONDERKANT: DATA & CONVERSIE METERS */}
         <div className="p-5 flex flex-col flex-grow">
-          <h3 className={`text-lg font-black leading-tight mb-2 transition-colors line-clamp-2 ${isExpired ? 'text-slate-400' : 'text-white group-hover:text-amber-500'}`}>
+          <h3 className={`text-lg font-black leading-tight mb-3 transition-colors line-clamp-2 ${isExpired ? 'text-slate-500' : 'text-slate-900 group-hover:text-amber-600'}`}>
             {title}
           </h3>
           
-          <div className="text-xs text-slate-500 font-medium mb-5 space-y-2">
+          <div className="text-xs text-slate-600 font-medium mb-5 space-y-2.5">
             <p className="flex items-center gap-2">
-              <span className="text-sm">👨‍🌾</span> <span className="truncate text-slate-300 font-bold">{maker}</span>
+              <span className="text-sm">👨‍🌾</span> <span className="truncate text-slate-900 font-bold">{maker}</span>
             </p>
             {location && (
               <div className="flex items-center gap-2">
                 <span className="text-sm">📍</span> 
-                <span className="truncate text-slate-400">
+                <span className="truncate flex items-center text-slate-500">
                   {location} 
                   {distance !== undefined && (
-                    <span className="ml-2 text-amber-500 font-black tracking-widest bg-amber-500/10 px-2 py-0.5 rounded shadow-sm border border-amber-500/20">
+                    <span className="ml-2 text-amber-700 font-black tracking-widest bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200 text-[9px] uppercase">
                       {formatDistance(distance)}
                     </span>
                   )}
@@ -124,17 +120,17 @@ export default function BatchCard({
             )}
           </div>
 
-          <div className="mt-auto pt-4 border-t border-slate-800/60">
+          <div className="mt-auto pt-4 border-t border-slate-100">
             <div className="flex justify-between items-end mb-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gereserveerd</span>
-              <span className="text-sm font-black text-amber-500">
-                {reserved} <span className="text-xs text-slate-500 font-bold">/ {total} <span className="uppercase text-[9px] tracking-wider">{unit || ""}</span></span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gereserveerd</span>
+              <span className="text-sm font-black text-amber-600">
+                {reserved} <span className="text-xs text-slate-400 font-bold">/ {total} <span className="uppercase text-[9px] tracking-wider">{unit || ""}</span></span>
               </span>
             </div>
             
-            <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden shadow-inner border border-slate-800/80 p-[1px]">
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden shadow-inner p-[1px]">
               <div 
-                className={`h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden ${isExpired ? 'bg-slate-700' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
+                className={`h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden ${isExpired ? 'bg-slate-300' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`}
                 style={{ width: `${percentage}%` }}
               >
                 {!isExpired && <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>}
