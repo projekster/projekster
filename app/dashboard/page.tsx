@@ -193,9 +193,9 @@ export default function Dashboard() {
   // ==========================================
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-amber-500 uppercase tracking-widest font-black text-xs animate-pulse">
+      <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-500 uppercase tracking-widest font-black text-xs animate-pulse">
           Kluis synchroniseren met het netwerk...
         </p>
       </main>
@@ -206,21 +206,21 @@ export default function Dashboard() {
   // MAIN DASHBOARD RENDER
   // ==========================================
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 pb-20 pt-8 relative">
+    <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 pt-8 relative">
       
       {/* ------------------------------------- */}
       {/* VERWIJDER MODAL (BEVESTIGING)         */}
       {/* ------------------------------------- */}
       {batchToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-red-900/50 rounded-3xl max-w-md w-full p-8 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-400"></div>
-            <div className="w-16 h-16 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-900/50 text-3xl">⚠️</div>
-            <h3 className="text-2xl font-black text-white text-center uppercase tracking-tight mb-2">Bevestig Vernietiging</h3>
-            <p className="text-slate-400 text-center text-sm mb-6">Weet je zeker dat je <strong className="text-white">"{batchToDelete.title}"</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-8 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-600 to-red-500"></div>
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 text-3xl">⚠️</div>
+            <h3 className="text-2xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Bevestig Vernietiging</h3>
+            <p className="text-slate-500 text-center text-sm mb-8 font-medium">Weet je zeker dat je <strong className="text-slate-900">"{batchToDelete.title}"</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.</p>
             <div className="flex gap-3">
-              <button disabled={isDeleting} onClick={() => setBatchToDelete(null)} className="w-1/2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase tracking-widest py-4 rounded-xl transition-colors">Annuleren</button>
-              <button disabled={isDeleting} onClick={executeDelete} className="w-1/2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-widest py-4 rounded-xl shadow-lg transition-all">{isDeleting ? "Wissen..." : "Vernietigen"}</button>
+              <button disabled={isDeleting} onClick={() => setBatchToDelete(null)} className="w-1/2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold uppercase tracking-widest py-4 rounded-xl transition-colors">Annuleren</button>
+              <button disabled={isDeleting} onClick={executeDelete} className="w-1/2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-widest py-4 rounded-xl shadow-md transition-all">{isDeleting ? "Wissen..." : "Vernietigen"}</button>
             </div>
           </div>
         </div>
@@ -234,30 +234,30 @@ export default function Dashboard() {
         <div className="flex flex-col gap-8 mb-12">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight mb-2">Mijn Kluis</h1>
-              <p className="text-slate-400 flex items-center gap-2 text-sm font-medium">
-                <span>🛡️</span> Geverifieerd als: <strong className="text-amber-500">{makerName}</strong>
+              <h1 className="text-4xl md:text-5xl font-black text-slate-900 uppercase tracking-tight mb-2">Mijn Kluis</h1>
+              <p className="text-slate-500 flex items-center gap-2 text-sm font-medium">
+                <span>🛡️</span> Geverifieerd als: <strong className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{makerName}</strong>
               </p>
             </div>
-            <Link href="/maak-batch" className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-xs py-4 px-6 rounded-xl transition-all shadow-lg shadow-amber-900/20 text-center">
+            <Link href="/maak-batch" className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-xs py-4 px-6 rounded-xl transition-all shadow-md text-center inline-block">
               + Nieuwe Oogst Toevoegen
             </Link>
           </div>
 
-          <div className="flex gap-2 border-b border-slate-800/80 pb-0">
+          <div className="flex gap-2 border-b border-slate-200 pb-0">
             <button 
               onClick={() => setViewMode("aanbod")} 
-              className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "aanbod" ? "text-amber-500" : "text-slate-500 hover:text-slate-300"}`}
+              className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "aanbod" ? "text-amber-600" : "text-slate-500 hover:text-slate-700"}`}
             >
               Mijn Aanbod (Verkoop)
-              {viewMode === "aanbod" && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.8)]"></div>}
+              {viewMode === "aanbod" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>}
             </button>
             <button 
               onClick={() => setViewMode("investeringen")} 
-              className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "investeringen" ? "text-emerald-500" : "text-slate-500 hover:text-slate-300"}`}
+              className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "investeringen" ? "text-emerald-600" : "text-slate-500 hover:text-slate-700"}`}
             >
               Mijn Claims (Aankoop)
-              {viewMode === "investeringen" && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>}
+              {viewMode === "investeringen" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>}
             </button>
           </div>
         </div>
@@ -271,60 +271,60 @@ export default function Dashboard() {
             {/* INKOMENDE VERZOEKEN (DE BALIE) */}
             {incomingOrders.length > 0 && (
               <div className="mb-16">
-                <div className="border-b border-amber-900/30 pb-4 mb-6 flex items-center justify-between">
-                  <h2 className="text-xl font-black text-amber-500 uppercase tracking-tight flex items-center gap-3">
-                    <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span> Actieve Orders
+                <div className="border-b border-slate-200 pb-4 mb-6 flex items-center justify-between">
+                  <h2 className="text-xl font-black text-amber-600 uppercase tracking-tight flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse"></span> Actieve Orders
                   </h2>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   {incomingOrders.map((order) => (
-                    <div key={order.id} className="bg-slate-900 border border-slate-700/50 hover:border-amber-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all flex flex-col justify-between">
+                    <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md relative overflow-hidden transition-all flex flex-col justify-between">
                       <div>
-                        <div className={`absolute top-0 left-0 w-1 h-full ${order.status === 'completed' ? 'bg-slate-500' : order.status === 'accepted' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                        <div className={`absolute top-0 left-0 w-1.5 h-full ${order.status === 'completed' ? 'bg-slate-300' : order.status === 'accepted' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
                         
                         <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                          <div className="pl-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                               {order.trade_type === "fiat" ? "💶 Fiat" : "📦 Ruil"} • {order.status === 'completed' ? 'Voltooid' : order.status === 'accepted' ? 'Actief' : 'Nieuw Verzoek'}
                             </p>
-                            <h3 className="text-lg font-bold text-white">{order.batch_title}</h3>
+                            <h3 className="text-lg font-bold text-slate-900">{order.batch_title}</h3>
                           </div>
                         </div>
 
-                        <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 mb-6">
-                          <p className="text-sm text-slate-300">
-                            <strong className="text-amber-500">{order.buyer_name}</strong> {order.status === 'completed' ? 'heeft overgenomen:' : 'wil overnemen:'} {order.trade_type === "fiat" ? <span className="font-bold text-white">{order.amount} eenheden</span> : <span>deze batch</span>}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 ml-2">
+                          <p className="text-sm text-slate-600 font-medium">
+                            <strong className="text-amber-600">{order.buyer_name}</strong> {order.status === 'completed' ? 'heeft overgenomen:' : 'wil overnemen:'} {order.trade_type === "fiat" ? <span className="font-bold text-slate-900">{order.amount} eenheden</span> : <span className="font-bold text-slate-900">deze batch</span>}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex gap-3 mt-auto">
+                      <div className="flex gap-3 mt-auto pl-2">
                         {order.status === "pending" && (
                           <>
-                            <button onClick={() => handleOrderAction(order, "rejected")} className="w-1/3 bg-slate-950 hover:bg-red-950/40 text-slate-300 hover:text-red-400 text-xs font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-800 transition-colors">Weiger</button>
-                            <button onClick={() => handleOrderAction(order, "accepted")} className="w-2/3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2"><span>🤝</span> Accepteer & Chat</button>
+                            <button onClick={() => handleOrderAction(order, "rejected")} className="w-1/3 bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 text-xs font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-200 hover:border-red-200 transition-colors">Weiger</button>
+                            <button onClick={() => handleOrderAction(order, "accepted")} className="w-2/3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest py-3 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2"><span>🤝</span> Accepteer & Chat</button>
                           </>
                         )}
                         {order.status === "accepted" && (
                           <>
-                            <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-1/2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-700 transition-colors">💬 Open Chat</button>
-                            <button onClick={() => handleOrderAction(order, "completed")} className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2"><span>✅</span> Afronden</button>
+                            <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-1/2 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-300 transition-colors shadow-sm">💬 Open Chat</button>
+                            <button onClick={() => handleOrderAction(order, "completed")} className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2"><span>✅</span> Afronden</button>
                           </>
                         )}
                         
                         {/* DE ERECODE MODULE VOOR VERKOPER */}
                         {order.status === "completed" && !ratedOrderIds.includes(order.id) && (
-                          <div className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 text-center animate-in zoom-in-95">
-                            <p className="text-xs text-slate-400 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Koper</p>
+                          <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center animate-in zoom-in-95">
+                            <p className="text-xs text-slate-500 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Koper</p>
                             <div className="flex gap-2">
-                              <button onClick={() => handleRateTransaction(order.id, order.buyer_name, -1)} className="w-1/2 bg-red-900/20 text-red-500 hover:bg-red-900/40 font-bold py-2 rounded-lg text-sm border border-red-900/50 transition-colors">-1 (Onbetrouwbaar)</button>
-                              <button onClick={() => handleRateTransaction(order.id, order.buyer_name, 1)} className="w-1/2 bg-emerald-900/20 text-emerald-500 hover:bg-emerald-900/40 font-bold py-2 rounded-lg text-sm border border-emerald-900/50 transition-colors">+1 (Betrouwbaar)</button>
+                              <button onClick={() => handleRateTransaction(order.id, order.buyer_name, -1)} className="w-1/2 bg-red-50 text-red-600 hover:bg-red-100 font-bold py-2 rounded-lg text-sm border border-red-200 transition-colors shadow-sm">-1 (Onbetrouwbaar)</button>
+                              <button onClick={() => handleRateTransaction(order.id, order.buyer_name, 1)} className="w-1/2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-bold py-2 rounded-lg text-sm border border-emerald-200 transition-colors shadow-sm">+1 (Betrouwbaar)</button>
                             </div>
                           </div>
                         )}
                         {order.status === "completed" && ratedOrderIds.includes(order.id) && (
-                          <div className="w-full text-center py-2 text-xs text-slate-500 font-bold uppercase tracking-widest">✅ Beoordeling afgegeven</div>
+                          <div className="w-full text-center py-2 text-xs text-slate-400 font-bold uppercase tracking-widest">✅ Beoordeling afgegeven</div>
                         )}
                       </div>
                     </div>
@@ -335,12 +335,12 @@ export default function Dashboard() {
 
             {/* MIJN ACTUELE VOORRAAD */}
             <div className="space-y-6">
-              <div className="border-b border-slate-900 pb-4">
-                <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3"><span>📜</span> Actief op de markt</h2>
+              <div className="border-b border-slate-200 pb-4">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3"><span>📜</span> Actief op de markt</h2>
               </div>
 
               {myBatches.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
                   {myBatches.map((batch) => (
                     <div key={batch.id} className="relative group h-full">
                       {/* HIER IS DE INJECTIE GEDAAN: created_at={batch.created_at} */}
@@ -358,29 +358,29 @@ export default function Dashboard() {
                         created_at={batch.created_at} 
                       />
                       
-                      {/* HOVER OVERLAY & VAULT LOCK */}
-                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-4 gap-3">
-                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-lg transition-colors">Bewerken</button>
+                      {/* HOVER OVERLAY & VAULT LOCK (WHITE CUBE) */}
+                      <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
+                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors shadow-sm">Bewerken</button>
                         
                         {batch.reserved > 0 ? (
                           <div className="w-full text-center group/lock relative">
-                            <button disabled className="w-full bg-slate-900/80 border border-slate-800 text-slate-500 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3 rounded-lg flex items-center justify-center gap-2"><span>🔒</span> Vergrendeld</button>
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 border border-slate-700 text-slate-300 text-[9px] font-medium p-3 rounded-lg opacity-0 group-hover/lock:opacity-100 transition-opacity pointer-events-none shadow-xl z-50">
+                            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-2"><span>🔒</span> Vergrendeld</button>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-800 text-white text-[10px] font-medium p-3 rounded-lg opacity-0 group-hover/lock:opacity-100 transition-opacity pointer-events-none shadow-xl z-50">
                               Verwijderen geblokkeerd. Handel actieve claims eerst af.
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-950/80 hover:bg-red-600 border border-red-900/50 hover:border-red-500 text-red-400 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-lg transition-colors">Verwijderen</button>
+                          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors shadow-sm">Verwijderen</button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="w-full bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl p-12 text-center">
-                  <span className="text-4xl mb-4 opacity-30">🕸️</span>
-                  <h3 className="text-white font-bold mb-1 text-sm uppercase tracking-wide">Je biedt niks aan</h3>
-                  <p className="text-slate-500 text-xs mt-2">Activeer een nieuwe batch om zichtbaar te worden op de radar.</p>
+                <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm">
+                  <span className="text-5xl mb-4 block opacity-40 grayscale">🕸️</span>
+                  <h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">Je biedt niks aan</h3>
+                  <p className="text-slate-500 text-sm mt-2">Activeer een nieuwe batch om zichtbaar te worden op de radar.</p>
                 </div>
               )}
             </div>
@@ -392,75 +392,75 @@ export default function Dashboard() {
         {/* ========================================================== */}
         {viewMode === "investeringen" && (
           <div className="animate-in fade-in slide-in-from-left-4 duration-300 space-y-6">
-            <div className="border-b border-slate-900 pb-4">
-              <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3"><span>📦</span> Jouw Claims bij Makers</h2>
+            <div className="border-b border-slate-200 pb-4">
+              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3"><span>📦</span> Jouw Claims bij Makers</h2>
             </div>
 
             {outgoingOrders.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {outgoingOrders.map(order => (
-                  <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+                  <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
                     <div>
-                      <div className="flex justify-between items-start mb-4 border-b border-slate-800 pb-4">
+                      <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                         <div>
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Aanbieder: <span className="text-white">{order.seller_name}</span></p>
-                          <h3 className="text-lg font-bold text-emerald-400 leading-tight">{order.batch_title}</h3>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Aanbieder: <span className="text-slate-900">{order.seller_name}</span></p>
+                          <h3 className="text-lg font-bold text-emerald-600 leading-tight">{order.batch_title}</h3>
                         </div>
                       </div>
                       
-                      <div className="mb-6 space-y-2">
+                      <div className="mb-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">Volume geclaimd:</span>
-                            <span className="text-white font-bold">{order.amount} {order.trade_type === 'fiat' ? 'Stuks/Eenheden' : 'Gehele Oogst'}</span>
+                            <span className="text-slate-500 font-medium">Volume geclaimd:</span>
+                            <span className="text-slate-900 font-bold">{order.amount} {order.trade_type === 'fiat' ? 'Stuks/Eenheden' : 'Gehele Oogst'}</span>
                          </div>
-                         <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">Huidige Status:</span>
-                            {order.status === 'pending' && <span className="text-amber-500 font-bold animate-pulse">Wachten op reactie...</span>}
-                            {order.status === 'accepted' && <span className="text-emerald-500 font-bold">Geaccepteerd</span>}
-                            {order.status === 'rejected' && <span className="text-red-500 font-bold">Geweigerd door maker</span>}
-                            {order.status === 'completed' && <span className="text-slate-400 font-bold">Transactie Voltooid</span>}
+                         <div className="flex justify-between text-sm items-center">
+                            <span className="text-slate-500 font-medium">Status:</span>
+                            {order.status === 'pending' && <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs border border-amber-100 animate-pulse">Wachten...</span>}
+                            {order.status === 'accepted' && <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs border border-emerald-100">Geaccepteerd</span>}
+                            {order.status === 'rejected' && <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded text-xs border border-red-100">Geweigerd</span>}
+                            {order.status === 'completed' && <span className="text-slate-500 font-bold bg-slate-200 px-2 py-1 rounded text-xs border border-slate-300">Voltooid</span>}
                          </div>
                       </div>
                     </div>
 
                     <div className="mt-auto">
                       {order.status === 'accepted' ? (
-                        <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/30 text-emerald-400 hover:text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all flex justify-center items-center gap-2">
+                        <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all flex justify-center items-center gap-2 shadow-sm">
                           <span>💬</span> Open Chat met Maker
                         </button>
                       ) : order.status === 'pending' ? (
-                        <button disabled className="w-full bg-slate-950 border border-slate-800 text-slate-600 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl cursor-not-allowed">
+                        <button disabled className="w-full bg-slate-50 border border-slate-200 text-slate-400 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl cursor-not-allowed">
                           Kanaal is gesloten
                         </button>
                       ) : order.status === 'rejected' ? (
-                         <button onClick={() => router.push(`/batch/${order.batch_id}`)} className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all">
+                         <button onClick={() => router.push(`/batch/${order.batch_id}`)} className="w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-sm">
                           Bekijk Originele Batch
                         </button>
                       ) : null}
 
                       {/* DE ERECODE MODULE VOOR KOPER */}
                       {order.status === 'completed' && !ratedOrderIds.includes(order.id) && (
-                        <div className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 text-center mt-2 animate-in zoom-in-95">
-                          <p className="text-xs text-slate-400 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Maker</p>
+                        <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center mt-3 animate-in zoom-in-95">
+                          <p className="text-xs text-slate-500 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Maker</p>
                           <div className="flex gap-2">
-                            <button onClick={() => handleRateTransaction(order.id, order.seller_name, -1)} className="w-1/2 bg-red-900/20 hover:bg-red-900/40 text-red-500 font-bold py-2 rounded-lg text-sm border border-red-900/50 transition-colors">-1 (Slecht)</button>
-                            <button onClick={() => handleRateTransaction(order.id, order.seller_name, 1)} className="w-1/2 bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-500 font-bold py-2 rounded-lg text-sm border border-emerald-900/50 transition-colors">+1 (Top)</button>
+                            <button onClick={() => handleRateTransaction(order.id, order.seller_name, -1)} className="w-1/2 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2.5 rounded-lg text-sm border border-red-200 transition-colors shadow-sm">-1 (Slecht)</button>
+                            <button onClick={() => handleRateTransaction(order.id, order.seller_name, 1)} className="w-1/2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold py-2.5 rounded-lg text-sm border border-emerald-200 transition-colors shadow-sm">+1 (Top)</button>
                           </div>
                         </div>
                       )}
                       {order.status === 'completed' && ratedOrderIds.includes(order.id) && (
-                        <div className="w-full text-center py-2 mt-2 text-xs text-slate-500 font-bold uppercase tracking-widest">✅ Beoordeling afgegeven</div>
+                        <div className="w-full text-center py-2 mt-2 text-xs text-slate-400 font-bold uppercase tracking-widest">✅ Beoordeling afgegeven</div>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="w-full bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl p-12 text-center">
-                <span className="text-4xl mb-4 opacity-30">🛒</span>
-                <h3 className="text-white font-bold mb-1 text-sm uppercase tracking-wide">Geen lopende claims</h3>
-                <p className="text-slate-500 text-xs max-w-sm mx-auto mb-6">Je hebt nog geen voorraad gereserveerd of geruild op de markt.</p>
-                <Link href="/" className="text-emerald-500 hover:text-emerald-400 text-xs font-black uppercase tracking-widest border border-emerald-500/20 hover:border-emerald-400/50 px-6 py-3 rounded-xl transition-all bg-emerald-500/5">
+              <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm">
+                <span className="text-5xl mb-4 block opacity-40 grayscale">🛒</span>
+                <h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">Geen lopende claims</h3>
+                <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">Je hebt nog geen voorraad gereserveerd of geruild op de markt.</p>
+                <Link href="/#aanbod" className="text-emerald-700 hover:text-emerald-800 text-xs font-black uppercase tracking-widest border border-emerald-200 hover:border-emerald-300 bg-emerald-50 px-6 py-4 rounded-xl transition-all shadow-sm inline-block">
                   Verken de markt
                 </Link>
               </div>
