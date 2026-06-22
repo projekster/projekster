@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { supabase } from "../../../utils/supabase";
+import { supabase } from "../../utils/supabase";
 
 const CATEGORIE_OPTIES = {
   voedsel: ["Vlees & Vis", "Zuivel & Eieren", "Groente & Fruit", "Graan & Meel", "Dranken & Conserven", "Honing & Zoet"],
