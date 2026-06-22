@@ -148,81 +148,87 @@ export default function ChatRoom() {
     }
   };
 
+  // ==========================================
+  // LAADSCHERM (WHITE CUBE)
+  // ==========================================
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
-        <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-amber-500 font-bold uppercase tracking-widest text-xs animate-pulse">Beveiligd kanaal opzetten...</p>
+      <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+        <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse">Beveiligd kanaal opzetten...</p>
       </main>
     );
   }
 
-  if (!order) return <div className="text-white text-center pt-20">Geen toegang of kanaal bestaat niet.</div>;
+  if (!order) return <div className="min-h-screen bg-slate-50 text-slate-900 text-center pt-20 font-bold uppercase tracking-widest text-sm">Geen toegang of kanaal bestaat niet.</div>;
 
   // Bepaal wie de gesprekspartner is
   const partnerName = currentUserName === order.seller_name ? order.buyer_name : order.seller_name;
 
   return (
-    <main className="min-h-[calc(100screen-69px)] bg-slate-950 text-slate-100 flex flex-col lg:grid lg:grid-cols-12 flex-grow">
+    <main className="min-h-[calc(100vh-69px)] bg-slate-50 text-slate-900 flex flex-col lg:grid lg:grid-cols-12 flex-grow">
       
       {/* ======================================= */}
       {/* LINKERKANT: HET LIVE CHAT SCHERM       */}
       {/* ======================================= */}
-      <div className="lg:col-span-8 flex flex-col h-[70vh] lg:h-[85vh] border-r border-slate-900">
+      <div className="lg:col-span-8 flex flex-col h-[75vh] lg:h-[calc(100vh-69px)] border-r border-slate-200 bg-slate-50/50">
         
         {/* Chat Header */}
-        <div className="p-4 md:p-6 border-b border-slate-900 bg-slate-900/20 flex items-center justify-between">
+        <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center font-bold text-amber-500 border border-slate-700">
+            <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-700 border border-slate-200 shadow-inner">
               {partnerName.substring(0, 2).toUpperCase()}
             </div>
             <div>
-              <h2 className="font-black text-white uppercase tracking-tight text-sm md:text-base">{partnerName}</h2>
-              <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                <span className="w-1.5 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Geverifieerd Kanaal
+              <h2 className="font-black text-slate-900 uppercase tracking-tight text-sm md:text-base">{partnerName}</h2>
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Geverifieerd Kanaal
               </p>
             </div>
           </div>
-          <Link href="/dashboard" className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-wider font-bold">
+          <Link href="/dashboard" className="text-xs text-slate-500 hover:text-slate-900 uppercase tracking-wider font-bold bg-white border border-slate-200 px-4 py-2 rounded-lg transition-colors shadow-sm">
             Sluit Chat
           </Link>
         </div>
 
         {/* Berichten Venster */}
-        <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-950/20 scrollbar-none">
+        <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-5 scrollbar-none">
           {messages.map((msg) => {
             const isMe = msg.sender_id === currentUserId;
             return (
-              <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"} animate-in fade-in duration-200`}>
-                <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider mb-1 px-1">
+              <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"} animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1 px-1">
                   {msg.sender_name}
                 </span>
-                <div className={`max-w-xs md:max-w-md p-4 rounded-2xl text-sm leading-relaxed shadow-lg ${
+                <div className={`max-w-[85%] md:max-w-md p-4 text-sm leading-relaxed shadow-sm ${
                   isMe 
-                    ? "bg-amber-600 text-white rounded-tr-none" 
-                    : "bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none"
+                    ? "bg-amber-600 text-white rounded-2xl rounded-tr-sm" 
+                    : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm"
                 }`}>
                   {msg.text}
                 </div>
-                <span className="text-[9px] text-slate-700 mt-1 px-1">
+                <span className="text-[9px] text-slate-400 mt-1 px-1 font-medium tracking-wider">
                   {new Date(msg.created_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             );
           })}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="h-2" />
         </div>
 
         {/* Input Balk */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-900 bg-slate-950 flex gap-3">
+        <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 bg-white flex gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
           <input 
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder={`Stuur een beveiligd bericht naar ${partnerName}...`}
-            className="flex-grow bg-slate-900 border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
+            className="flex-grow bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner"
           />
-          <button className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-xs px-6 rounded-xl transition-colors shadow-lg shadow-amber-900/20">
+          <button 
+            disabled={!newMessage.trim()}
+            className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-black uppercase tracking-widest text-xs px-6 md:px-8 rounded-xl transition-colors shadow-md flex items-center justify-center"
+          >
             Verstuur
           </button>
         </form>
@@ -232,40 +238,42 @@ export default function ChatRoom() {
       {/* ======================================= */}
       {/* RECHTERKANT: CONTEXT & CONTEXT DETAILS   */}
       {/* ======================================= */}
-      <div className="lg:col-span-4 bg-slate-950 p-6 space-y-6 flex flex-col justify-between h-auto lg:h-[85vh]">
+      <div className="lg:col-span-4 bg-white border-l border-slate-200 p-6 md:p-8 space-y-6 flex flex-col justify-between h-auto lg:h-[calc(100vh-69px)] overflow-y-auto">
         <div className="space-y-6">
-          <div className="border-b border-slate-900 pb-4">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Informatie & Context</h3>
-            <h4 className="text-xl font-black text-white uppercase tracking-tight">{order.batch_title}</h4>
+          <div className="border-b border-slate-100 pb-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Informatie & Context</h3>
+            <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">{order.batch_title}</h4>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-5 shadow-sm">
             <div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Transactie Vorm</p>
-              <span className={`inline-block text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-md ${
-                order.trade_type === "fiat" ? "bg-amber-600/10 text-amber-500 border border-amber-500/20" : "bg-emerald-600/10 text-emerald-400 border border-emerald-400/20"
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Transactie Vorm</p>
+              <span className={`inline-block text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-sm ${
+                order.trade_type === "fiat" ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
               }`}>
                 {order.trade_type === "fiat" ? "💶 Fiat Handel" : "🔄 Natura Ruil"}
               </span>
             </div>
 
-            {order.trade_type === "fiat" ? (
-              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Gereserveerd Volume</p>
-                <p className="text-base font-bold text-white">{order.amount} eenheden</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tegenprestatie (In Natura)</p>
-                <p className="text-sm font-medium text-emerald-400 italic">"{order.trade_offer}"</p>
-              </div>
-            )}
+            <div className="pt-4 border-t border-slate-200">
+              {order.trade_type === "fiat" ? (
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gereserveerd Volume</p>
+                  <p className="text-xl font-black text-slate-900">{order.amount} <span className="text-sm text-slate-500 font-bold uppercase tracking-wider">eenheden</span></p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Tegenprestatie (In Natura)</p>
+                  <p className="text-sm font-medium text-slate-700 bg-white border border-slate-200 p-3 rounded-xl shadow-inner italic">"{order.trade_offer}"</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Veiligheidsvoorschrift */}
-        <div className="p-4 bg-slate-900/30 border border-slate-900 rounded-xl text-center">
-          <p className="text-[10px] text-slate-600 font-medium leading-relaxed">
+        <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-center mt-6">
+          <p className="text-[10px] text-blue-800 font-medium leading-relaxed">
             🔒 Dit kanaal is end-to-end beveiligd binnen de Projekster-architectuur. Stem hier de overdracht en locatie af. Handel altijd veilig en volgens de erecode.
           </p>
         </div>
