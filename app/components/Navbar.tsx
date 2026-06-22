@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../utils/supabase";
+import Image from "next/image"; // <-- De Compressie Engine
 
 interface Notification {
   id: string;
@@ -34,11 +35,9 @@ export default function Navbar() {
     };
 
     const fetchProfileAndNotifications = async (userId: string) => {
-      // Haal naam op
       const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", userId).single();
       if (profile) setMakerName(profile.display_name);
 
-      // Haal ongelezen notificaties op
       const { data: notifs } = await supabase
         .from("notifications")
         .select("*")
@@ -48,7 +47,7 @@ export default function Navbar() {
       
       if (notifs) setNotifications(notifs);
 
-      // ZET DE LIVE RADAR AAN VOOR NOTIFICATIES
+      // LIVE RADAR AAN VOOR NOTIFICATIES
       supabase
         .channel('public:notifications')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, 
@@ -82,12 +81,9 @@ export default function Navbar() {
   };
 
   const markAsRead = async (id: string, link: string) => {
-    // 1. Markeer in UI
     setNotifications(notifications.filter(n => n.id !== id));
     setShowNotifications(false);
-    // 2. Markeer in DB
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    // 3. Stuur gebruiker naar de juiste plek (Dashboard of Chat)
     router.push(link);
   };
 
@@ -99,11 +95,18 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="w-full border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+    <nav className="w-full border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 shadow-xl">
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-4 flex justify-between items-center relative">
         
-        <Link href="/" className="text-xl md:text-2xl font-black tracking-tighter text-white uppercase flex items-center gap-2 group">
-          <span className="bg-amber-600 text-white w-8 h-8 flex items-center justify-center rounded uppercase text-sm group-hover:bg-amber-500 transition-colors shadow-lg shadow-amber-900/20">P</span>
+        <Link href="/" className="text-xl md:text-2xl font-black tracking-tighter text-white uppercase flex items-center gap-3 group">
+          <Image 
+            src="/icon-192x192.png" 
+            alt="Projekster Logo" 
+            width={32} 
+            height={32} 
+            priority // Hack: Laad dit direct in voor perfecte LCP score
+            className="rounded-md shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-transform duration-300 group-hover:scale-110" 
+          />
           Projekster.
         </Link>
 
@@ -116,7 +119,7 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-4 border-l border-slate-800 pl-6 relative">
               
-              {/* NOTIFICATIE BEL (HACK #5) */}
+              {/* NOTIFICATIE BEL */}
               <div className="relative">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}
@@ -183,7 +186,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* MOBIEL MENU (Ongewijzigd, weggelaten voor overzichtelijkheid, code blijft hetzelfde) */}
+        {/* MOBIEL MENU */}
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-slate-300 hover:text-white p-2">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-7 h-7">
             {isMobileMenuOpen ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h18M3 6h18M3 18h18" />}
@@ -192,14 +195,13 @@ export default function Navbar() {
       </div>
 
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 py-6 space-y-5 shadow-2xl animate-in slide-in-from-top-2">
+        <div className="md:hidden bg-slate-900/95 backdrop-blur-xl border-b border-slate-800 px-4 py-6 space-y-5 shadow-2xl animate-in slide-in-from-top-2 absolute w-full left-0 z-40">
           {user && (
             <div className="pb-4 border-b border-slate-800 mb-4 flex justify-between items-center">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Ingelogd als</p>
                 <p className="text-lg font-bold text-white">{makerName}</p>
               </div>
-              {/* MOBIELE NOTIFICATIE BEL */}
               <button onClick={() => { setShowNotifications(!showNotifications); }} className="relative text-2xl">
                 🔔
                 {notifications.length > 0 && <span className="absolute top-0 right-0 h-3 w-3 rounded-full bg-amber-500 animate-pulse border-2 border-slate-900"></span>}
