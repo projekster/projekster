@@ -21,11 +21,12 @@ export default function Navbar() {
   const [makerName, setMakerName] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Notificatie State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
+    let activeChannel: any;
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -47,10 +48,13 @@ export default function Navbar() {
       
       if (notifs) setNotifications(notifs);
 
-      supabase
-        .channel('public:notifications')
+      // DE FIX: Maak een absoluut uniek kanaal om botsingen te voorkomen
+      const uniqueChannelName = `notifs_${userId}_${Date.now()}`;
+      activeChannel = supabase.channel(uniqueChannelName);
+
+      activeChannel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, 
-          (payload) => {
+          (payload: any) => {
             setNotifications((current) => [payload.new as Notification, ...current]);
           }
         )
@@ -70,7 +74,13 @@ export default function Navbar() {
       }
     });
 
-    return () => { subscription.unsubscribe(); };
+    // DE FIX: Sloop de connectie meedogenloos af zodra de pagina herlaadt
+    return () => { 
+      subscription.unsubscribe();
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -117,13 +127,8 @@ export default function Navbar() {
           
           {user ? (
             <div className="flex items-center gap-4 border-l border-slate-200 pl-6 relative">
-              
-              {/* NOTIFICATIE BEL */}
               <div className="relative">
-                <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2 text-slate-400 hover:text-slate-900 transition-colors relative"
-                >
+                <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors relative">
                   <span className="text-xl">🔔</span>
                   {notifications.length > 0 && (
                     <span className="absolute top-1 right-1 flex h-3 w-3">
@@ -133,7 +138,6 @@ export default function Navbar() {
                   )}
                 </button>
 
-                {/* NOTIFICATIE DROPDOWN PANEL */}
                 {showNotifications && (
                   <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
                     <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -145,11 +149,7 @@ export default function Navbar() {
                     <div className="max-h-80 overflow-y-auto scrollbar-none">
                       {notifications.length > 0 ? (
                         notifications.map((n) => (
-                          <div 
-                            key={n.id} 
-                            onClick={() => markAsRead(n.id, n.link)}
-                            className="p-4 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
-                          >
+                          <div key={n.id} onClick={() => markAsRead(n.id, n.link)} className="p-4 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors">
                             <h4 className="text-sm font-bold text-amber-600 mb-1">{n.title}</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">{n.content}</p>
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-2 block">
@@ -158,9 +158,7 @@ export default function Navbar() {
                           </div>
                         ))
                       ) : (
-                        <div className="p-8 text-center text-slate-400 text-xs font-medium">
-                          Geen nieuwe transmissies.
-                        </div>
+                        <div className="p-8 text-center text-slate-400 text-xs font-medium">Geen nieuwe transmissies.</div>
                       )}
                     </div>
                   </div>
@@ -193,7 +191,6 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* MOBIEL MENU PANEL */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-slate-200 px-4 py-6 space-y-5 shadow-xl animate-in slide-in-from-top-2 absolute w-full left-0 z-40">
           {user && (
@@ -202,7 +199,7 @@ export default function Navbar() {
                 <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Ingelogd als</p>
                 <p className="text-lg font-black text-slate-900">{makerName}</p>
               </div>
-              <button onClick={() => { setShowNotifications(!showNotifications); }} className="relative text-2xl">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="relative text-2xl">
                 🔔
                 {notifications.length > 0 && <span className="absolute top-0 right-0 h-3 w-3 rounded-full bg-amber-500 animate-pulse border-2 border-white"></span>}
               </button>

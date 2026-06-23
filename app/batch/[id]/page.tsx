@@ -2,18 +2,21 @@ import type { Metadata, ResolvingMetadata } from 'next';
 import { supabase } from '../../utils/supabase';
 import BatchDetailClient from './BatchDetailClient';
 
+// Next.js 15+ Architectuur: params is nu een Promise!
 type Props = {
-  params: { id: string }
+  params: Promise<{ id: string }>
 };
 
 // ==========================================
 // 1. DYNAMIC OPENGRAPH GENERATOR (SEO & Virale Motor)
-// Draait 100% op de Server
 // ==========================================
 export async function generateMetadata(
-  { params }: Props,
+  props: Props,
   parent: ResolvingMetadata
 ): Promise<Metadata> {
+  // PAK DE PROMISE UIT (De levensreddende hack)
+  const params = await props.params;
+
   const { data: batch } = await supabase
     .from('batches')
     .select('title, maker, description, image_url, price, location')
@@ -48,7 +51,9 @@ export async function generateMetadata(
 // ==========================================
 // 2. DE SERVER RENDERER (Doorgeefluik)
 // ==========================================
-export default function Page({ params }: Props) {
-  // We forceren de ID prop hier direct naar binnen, geen haperingen meer.
+export default async function Page(props: Props) {
+  // PAK DE PROMISE UIT VOORDAT WE HEM DOORGEVEN
+  const params = await props.params;
+  
   return <BatchDetailClient id={params.id} />;
 }

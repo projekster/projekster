@@ -36,7 +36,12 @@ export default function ChatRoom() {
   }, [messages]);
 
   useEffect(() => {
+    let activeChannel: any; // DE FIX: Bewaar het kanaal op het hoogste niveau voor de cleanup
+
     async function initializeChat() {
+      const id = params?.id as string;
+      if (!id) return;
+
       // 1. Verifieer de sessie
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -54,7 +59,7 @@ export default function ChatRoom() {
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
           .select("*")
-          .eq("id", params.id)
+          .eq("id", id)
           .single();
 
         if (orderError) throw orderError;
@@ -64,20 +69,23 @@ export default function ChatRoom() {
         const { data: messagesData } = await supabase
           .from("messages")
           .select("*")
-          .eq("order_id", params.id)
+          .eq("order_id", id)
           .order("created_at", { ascending: true });
 
         if (messagesData) setMessages(messagesData);
 
         // ==========================================
-        // TELEMETRIE: LIVE WEBSOCKET SUBSCRIPTION (REALTIME)
+        // TELEMETRIE: LIVE WEBSOCKET SUBSCRIPTION
+        // DE FIX: Unieke kanaalnaam voor 100% stabiliteit
         // ==========================================
-        const channel = supabase
-          .channel(`room-${params.id}`)
+        const uniqueChannelName = `room_${id}_${Date.now()}`;
+        activeChannel = supabase.channel(uniqueChannelName);
+        
+        activeChannel
           .on(
             "postgres_changes",
-            { event: "INSERT", schema: "public", table: "messages", filter: `order_id=eq.${params.id}` },
-            (payload) => {
+            { event: "INSERT", schema: "public", table: "messages", filter: `order_id=eq.${id}` },
+            (payload: any) => {
               const incoming = payload.new as Message;
               // Voorkom dubbele rendering als je zelf de verzender bent
               setMessages((prev) => {
@@ -88,10 +96,6 @@ export default function ChatRoom() {
           )
           .subscribe();
 
-        return () => {
-          supabase.removeChannel(channel);
-        };
-
       } catch (error) {
         console.error("Fout bij laden van chatroom:", error);
       } finally {
@@ -100,21 +104,27 @@ export default function ChatRoom() {
     }
 
     initializeChat();
+
+    // DE FIX: Dit is de daadwerkelijke cleanup functie die React veilig kan aanroepen
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
   }, [params.id, router]);
 
   // Bericht Verzenden inclusief Notificatie-Trigger
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentUserId) return;
+    if (!newMessage.trim() || !currentUserId || !order) return;
 
     const messageText = newMessage.trim();
     setNewMessage(""); // Maak direct leeg voor snelle UX feel
 
     try {
-      // 1. Bepaal wie de gesprekspartner is (de ontvanger van de notificatie)
+      // 1. Bepaal wie de gesprekspartner is
       const partnerName = currentUserName === order.seller_name ? order.buyer_name : order.seller_name;
       
-      // Zoek het user_id van de partner op in de profiles tabel
       const { data: partnerProfile } = await supabase
         .from("profiles")
         .select("id")
@@ -162,7 +172,6 @@ export default function ChatRoom() {
 
   if (!order) return <div className="min-h-screen bg-slate-50 text-slate-900 text-center pt-20 font-bold uppercase tracking-widest text-sm">Geen toegang of kanaal bestaat niet.</div>;
 
-  // Bepaal wie de gesprekspartner is
   const partnerName = currentUserName === order.seller_name ? order.buyer_name : order.seller_name;
 
   return (
