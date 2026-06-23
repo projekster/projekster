@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../utils/supabase"; // Top 1% import hack, check altijd dit pad!
+import { supabase } from "../../utils/supabase"; // <-- De pad-verwijzing is hier gefixt (../../)
 import Link from "next/link";
 import Image from "next/image";
 
 // ==========================================
 // DE CLIENT-SIDE APPLICATIE (UI & Logica)
-// We accepteren de ID keihard van de server voor 100% laad-garantie.
 // ==========================================
 export default function BatchDetailClient({ id }: { id: string }) {
   const router = useRouter();
@@ -28,7 +27,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
   // --- DATA OPHALEN ---
   useEffect(() => {
     async function fetchBatch() {
-      if (!id) return; // Beveiliging
+      if (!id) return; 
 
       try {
         const { data, error } = await supabase
@@ -42,7 +41,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
       } catch (error) {
         console.error("Fout bij ophalen:", error);
       } finally {
-        setIsLoading(false); // Hierdoor bevriest het laadscherm nooit meer!
+        setIsLoading(false); 
       }
     }
 
@@ -186,7 +185,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
                   src={batch.image_url} 
                   alt={batch.title} 
                   fill
-                  unoptimized={true} // <-- Top 1% Hack tegen Next.js compressie crashes
+                  unoptimized={true} 
                   sizes="(max-width: 1024px) 100vw, 60vw"
                   className="object-cover transition-transform duration-700 group-hover:scale-105" 
                 />
@@ -229,10 +228,6 @@ export default function BatchDetailClient({ id }: { id: string }) {
                   <div>
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Aangeboden door</p>
                     <p className="font-black text-xl text-slate-900">{batch.maker}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                      <p className="text-xs text-slate-500 font-medium">Geverifieerde Producent in deze regio</p>
-                    </div>
                   </div>
                 </div>
               </div>
