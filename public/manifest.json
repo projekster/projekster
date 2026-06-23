@@ -4,8 +4,8 @@
   "description": "De directe verbinding tussen vrije producenten en de lokale gemeenschap. Elimineer de supermarkt. Herwin je waarde.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#0f172a",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "orientation": "portrait-primary",
   "icons": [
     {
