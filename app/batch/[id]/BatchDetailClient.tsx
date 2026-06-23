@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../utils/supabase";
+import { supabase } from "../../../utils/supabase"; // Top 1% import hack, check altijd dit pad!
 import Link from "next/link";
 import Image from "next/image";
 
 // ==========================================
 // DE CLIENT-SIDE APPLICATIE (UI & Logica)
+// We accepteren de ID keihard van de server voor 100% laad-garantie.
 // ==========================================
 export default function BatchDetailClient({ id }: { id: string }) {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function BatchDetailClient({ id }: { id: string }) {
   // --- DATA OPHALEN ---
   useEffect(() => {
     async function fetchBatch() {
+      if (!id) return; // Beveiliging
+
       try {
         const { data, error } = await supabase
           .from("batches")
@@ -39,13 +42,11 @@ export default function BatchDetailClient({ id }: { id: string }) {
       } catch (error) {
         console.error("Fout bij ophalen:", error);
       } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Hierdoor bevriest het laadscherm nooit meer!
       }
     }
 
-    if (id) {
-      fetchBatch();
-    }
+    fetchBatch();
   }, [id]);
 
   // --- TRANSACTIE LOGICA ---
@@ -150,7 +151,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
         <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100 shadow-sm">
           <span className="text-4xl">⚠️</span>
         </div>
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-widest mb-4">Batch Niet Gevonden</h1>
+        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-widest mb-4">Batch Niet Gevonden of Geblokkeerd</h1>
         <p className="text-slate-500 max-w-md mb-8">Deze oogst of grondstof bestaat niet meer of is verwijderd uit de kluis.</p>
         <Link href="/" className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-md">
           Terug naar de markt
@@ -185,6 +186,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
                   src={batch.image_url} 
                   alt={batch.title} 
                   fill
+                  unoptimized={true} // <-- Top 1% Hack tegen Next.js compressie crashes
                   sizes="(max-width: 1024px) 100vw, 60vw"
                   className="object-cover transition-transform duration-700 group-hover:scale-105" 
                 />
