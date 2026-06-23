@@ -67,6 +67,7 @@ export default function BatchCard({
               src={image_url} 
               alt={title} 
               fill
+              unoptimized={true} // <-- DEZE HACK VOORKOMT HET WITTE SCHERM CRASH!
               sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
               className={`object-cover transition-transform duration-700 ${isExpired ? '' : 'group-hover:scale-105'}`} 
             />
