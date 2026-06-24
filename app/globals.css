@@ -29,3 +29,18 @@
   background: transparent;
   border: none;
 }
+
+/* =========================================
+   TACTICAL QR SCANNER ANIMATIONS
+   ========================================= */
+@keyframes scan {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(188px); /* Beweegt exact tot de onderkant van het vizier */
+  }
+  100% {
+    transform: translateY(0);
+  }
+}

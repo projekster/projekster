@@ -369,22 +369,36 @@ export default function Dashboard() {
               </div>
               {myBatches.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
-                  {myBatches.map((batch) => (
-                    <div key={batch.id} className="relative group h-full">
-                      <BatchCard {...batch} />
-                      <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
-                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
-                        {batch.reserved > 0 ? (
-                          <div className="w-full text-center group/lock relative">
-                            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+  {myBatches.map((batch) => (
+    <div key={batch.id} className="relative group h-full">
+      <BatchCard 
+        id={batch.id} 
+        title={batch.title} 
+        maker={batch.maker} 
+        reserved={batch.reserved} 
+        total={batch.total} 
+        category={batch.category} 
+        daysLeft={batch.days_left} /* HIER ZIT DE FIX: we vertalen days_left naar daysLeft */
+        image_url={batch.image_url} 
+        location={batch.location} 
+        unit={batch.unit} 
+        created_at={batch.created_at} 
+      />
+      
+      {/* HOVER OVERLAY & VAULT LOCK (WHITE CUBE) */}
+      <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
+        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
+        {batch.reserved > 0 ? (
+          <div className="w-full text-center group/lock relative">
+            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
+          </div>
+        ) : (
+          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
+        )}
+      </div>
+    </div>
+  ))}
+</div>
               ) : (
                 <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm">
                   <h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">De schappen zijn leeg</h3>

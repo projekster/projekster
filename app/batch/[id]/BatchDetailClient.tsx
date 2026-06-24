@@ -77,30 +77,32 @@ export default function BatchDetailClient({ id }: { id: string }) {
       const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", session?.user.id).single();
       const buyerName = profile?.display_name || "Anonieme Koper";
 
-      const { error: orderError } = await supabase.from("orders").insert([{
-        batch_id: batch.id,
-        buyer_id: session?.user.id,
-        buyer_name: buyerName,
-        seller_name: batch.maker,
-        batch_title: batch.title,
-        amount: reserveAmount,
-        trade_type: "fiat",
-        status: "completed" // Direct gereserveerd via Fiat
-      }]);
-      if (orderError) throw orderError;
+      // TOP 1% ARCHITECTUUR: Stuur de koper naar de onzichtbare Checkout Server
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId: batch.id,
+          buyerId: session?.user.id,
+          buyerName: buyerName,
+          reserveAmount: reserveAmount
+        }),
+      });
 
-      const newReserved = batch.reserved + reserveAmount;
-      const { error: batchError } = await supabase.from('batches').update({ reserved: newReserved }).eq('id', batch.id);
-      if (batchError) throw batchError;
+      const data = await response.json();
 
-      setBatch({ ...batch, reserved: newReserved });
-      setActionSuccess("reserve");
+      if (data.url) {
+        // Lanceer de Stripe iDEAL Betaalomgeving
+        window.location.href = data.url; 
+      } else {
+        throw new Error(data.error || "Fout bij opzetten kluis.");
+      }
+
     } catch (error: any) {
-      console.error("Reserveringsfout:", error);
-      alert("De kluis weigerde de reservering.");
-    } finally {
-      setIsProcessing(false);
-    }
+      console.error("Betaalfout:", error);
+      alert("De bankkluis kon niet geopend worden. Probeer het opnieuw.");
+      setIsProcessing(false); // We zetten hem alleen op false als het misgaat (anders laadt hij door tot redirect)
+    } 
   };
 
   const handleTrade = async () => {
