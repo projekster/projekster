@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../utils/supabase"; // <-- De pad-verwijzing is hier gefixt (../../)
+import { supabase } from "../../utils/supabase"; 
 import Link from "next/link";
 import Image from "next/image";
 
@@ -56,6 +56,13 @@ export default function BatchDetailClient({ id }: { id: string }) {
       router.push("/login");
       return;
     }
+
+    // TOP 1% HACK: Zelf-aankoop Blokkade
+    const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", session.user.id).single();
+    if (profile && batch.maker === profile.display_name) {
+      alert("Beveiliging: Je kunt niet reserveren of ruilen in je eigen voorraad.");
+      return;
+    }
     
     if (mode === "reserve") setReserveMode(true);
     if (mode === "trade") setTradeMode(true);
@@ -77,7 +84,8 @@ export default function BatchDetailClient({ id }: { id: string }) {
         seller_name: batch.maker,
         batch_title: batch.title,
         amount: reserveAmount,
-        trade_type: "fiat"
+        trade_type: "fiat",
+        status: "completed" // Direct gereserveerd via Fiat
       }]);
       if (orderError) throw orderError;
 
@@ -110,9 +118,10 @@ export default function BatchDetailClient({ id }: { id: string }) {
         buyer_name: buyerName,
         seller_name: batch.maker,
         batch_title: batch.title,
-        amount: 1, 
+        amount: 1, // Standaard ruil eenheid (nooit meer de hele batch)
         trade_type: "trade",
-        trade_offer: tradeOffer
+        trade_offer: tradeOffer,
+        status: "pending" // Gaat de Inbox-flow in als voorstel
       }]);
       if (orderError) throw orderError;
 
@@ -323,7 +332,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
                   <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center animate-in fade-in slide-in-from-bottom-2 shadow-sm">
                     <span className="text-4xl mb-3 block">🤝</span>
                     <h3 className="font-bold text-amber-800 mb-1">Voorstel Verzonden</h3>
-                    <p className="text-xs text-amber-600 font-medium">Jouw ruilvoorstel ligt nu bij de maker ter overweging.</p>
+                    <p className="text-xs text-amber-600 font-medium">Jouw ruilvoorstel is verzonden en de maker opent nu een communicatiekanaal met je.</p>
                   </div>
                 ) : remaining <= 0 ? (
                   <button disabled className="w-full bg-slate-100 text-slate-400 font-black uppercase tracking-widest py-5 rounded-xl cursor-not-allowed border border-slate-200">
