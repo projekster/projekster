@@ -24,6 +24,16 @@ interface Order {
   escrow_status?: string; qr_release_code?: string; created_at: string;
 }
 
+// Helper: Vertaalt de VAPID sleutel voor de browser
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+  return outputArray;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   
@@ -236,11 +246,73 @@ export default function Dashboard() {
   };
 
   const toggleNotification = async (type: 'email' | 'push') => {
-    const newValue = type === 'email' ? !emailAlerts : !pushAlerts;
-    if (type === 'email') setEmailAlerts(newValue);
-    if (type === 'push') setPushAlerts(newValue);
-    try { await supabase.from("profiles").update(type === 'email' ? { email_alerts: newValue } : { push_alerts: newValue }).eq("id", currentUserId); } 
-    catch (error) { if (type === 'email') setEmailAlerts(!newValue); if (type === 'push') setPushAlerts(!newValue); }
+    try {
+      if (type === 'email') {
+        const newValue = !emailAlerts;
+        setEmailAlerts(newValue); // Optimistic UI
+        await supabase.from("profiles").update({ email_alerts: newValue }).eq("id", currentUserId);
+      }
+
+      if (type === 'push') {
+        const newValue = !pushAlerts;
+        
+        if (newValue) {
+          // TURN ON: Koppel de telefoon aan de Push Servers
+          if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            alert("Push berichten worden helaas niet ondersteund door deze browser (gebruik Chrome of Safari op mobiel).");
+            return;
+          }
+
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            alert("Je moet notificaties handmatig toestaan in de instellingen van je browser of telefoon.");
+            return;
+          }
+
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          const readyRegistration = await navigator.serviceWorker.ready;
+
+          // Haal het unieke adres van deze telefoon op
+          const subscription = await readyRegistration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!)
+          });
+
+          const subData = JSON.parse(JSON.stringify(subscription));
+
+          // Sla het adres veilig op in je nieuwe database tabel
+          const { error: subError } = await supabase.from('push_subscriptions').insert({
+            user_id: currentUserId,
+            endpoint: subData.endpoint,
+            p256dh: subData.keys.p256dh,
+            auth: subData.keys.auth
+          });
+
+          if (subError && !subError.message.includes("duplicate")) throw subError;
+
+          setPushAlerts(true);
+          await supabase.from("profiles").update({ push_alerts: true }).eq("id", currentUserId);
+          alert("App push-berichten zijn geactiveerd! Je telefoon trilt bij een nieuw bericht.");
+
+        } else {
+          // TURN OFF: Ontkoppel de telefoon
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          
+          if (subscription) {
+            await subscription.unsubscribe();
+            // Wis het adres uit je database
+            await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+          }
+
+          setPushAlerts(false);
+          await supabase.from("profiles").update({ push_alerts: false }).eq("id", currentUserId);
+        }
+      }
+    } catch (error) {
+      console.error("Fout bij opslaan notificatievoorkeur:", error);
+      alert("Er ging iets mis. Zorg dat je verbonden bent met het netwerk.");
+    }
   };
 
   if (isLoading) {
