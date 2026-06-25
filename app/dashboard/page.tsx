@@ -43,13 +43,14 @@ export default function Dashboard() {
   const [outgoingOrders, setOutgoingOrders] = useState<Order[]>([]);
   const [ratedOrderIds, setRatedOrderIds] = useState<string[]>([]);
 
-  // Notificatie Voorkeuren
+  // ==========================================
+  // NIEUW: NOTIFICATIE VOORKEUREN
+  // ==========================================
   const [emailAlerts, setEmailAlerts] = useState(true);
+  const [pushAlerts, setPushAlerts] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
-  
-  // De Nieuwe Navigatie Structuur
   const [viewMode, setViewMode] = useState<"aanbod" | "investeringen" | "instellingen">("aanbod");
   
   // Modals
@@ -69,13 +70,23 @@ export default function Dashboard() {
       setCurrentUserEmail(session.user.email || "");
 
       try {
-        const { data: profileData } = await supabase.from("profiles").select("display_name, stripe_account_id, stripe_onboarding_complete").eq("id", session.user.id).single();
+        // TOP 1% FIX: Haal nu ook email_alerts en push_alerts op uit de database
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("display_name, stripe_account_id, stripe_onboarding_complete, email_alerts, push_alerts")
+          .eq("id", session.user.id)
+          .single();
+          
         let currentMaker = profileData?.display_name || "";
         
         if (currentMaker) {
           setMakerName(currentMaker);
           setStripeOnboarded(profileData?.stripe_onboarding_complete || false);
           setStripeAccountId(profileData?.stripe_account_id || "");
+          
+          // Laad de communicatievoorkeuren direct in de UI
+          if (profileData?.email_alerts !== undefined) setEmailAlerts(profileData.email_alerts);
+          if (profileData?.push_alerts !== undefined) setPushAlerts(profileData.push_alerts);
 
           const { data: batchesData } = await supabase.from("batches").select("*").eq("maker", currentMaker).order("created_at", { ascending: false });
           if (batchesData) setMyBatches(batchesData);
@@ -160,15 +171,34 @@ export default function Dashboard() {
   };
 
   // ==========================================
-  // 4. INSTELLINGEN OPSLAAN
+  // 4. INSTELLINGEN & NOTIFICATIES OPSLAAN (LIVE)
   // ==========================================
   const saveSettings = async () => {
     setIsSavingSettings(true);
     try {
       await supabase.from("profiles").update({ display_name: makerName }).eq("id", currentUserId);
-      alert("Instellingen succesvol opgeslagen.");
+      alert("Profiel succesvol opgeslagen.");
     } catch (error) { alert("Kon instellingen niet opslaan."); }
     finally { setIsSavingSettings(false); }
+  };
+
+  const toggleNotification = async (type: 'email' | 'push') => {
+    const newValue = type === 'email' ? !emailAlerts : !pushAlerts;
+    
+    // Optimistic UI Update
+    if (type === 'email') setEmailAlerts(newValue);
+    if (type === 'push') setPushAlerts(newValue);
+
+    try {
+      // Sla direct op in de database
+      const updateData = type === 'email' ? { email_alerts: newValue } : { push_alerts: newValue };
+      await supabase.from("profiles").update(updateData).eq("id", currentUserId);
+    } catch (error) {
+      console.error("Fout bij opslaan notificatievoorkeur:", error);
+      // Rollback als het faalt
+      if (type === 'email') setEmailAlerts(!newValue);
+      if (type === 'push') setPushAlerts(!newValue);
+    }
   };
 
   // ==========================================
@@ -401,7 +431,7 @@ export default function Dashboard() {
         )}
 
         {/* ========================================================== */}
-        {/* VIEW 3: INSTELLINGEN & KYC (NIEUW!)                        */}
+        {/* VIEW 3: INSTELLINGEN & KYC (MET LIVE SCHAKELAARS)          */}
         {/* ========================================================== */}
         {viewMode === "instellingen" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8 max-w-4xl">
@@ -468,23 +498,38 @@ export default function Dashboard() {
                </button>
             </div>
 
-            {/* KAART 3: NOTIFICATIES */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm opacity-60">
+            {/* KAART 3: NOTIFICATIES & PUSH (NU LEVEND) */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
                <div className="flex items-center gap-3 mb-2">
                  <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xl border border-slate-200">🔔</div>
                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Communicatie Voorkeuren</h2>
                </div>
-               <p className="text-sm text-slate-500 mb-6 font-medium border-b border-slate-100 pb-6">Binnenkort beschikbaar: Ontvang e-mails bij nieuwe chats of reserveringen.</p>
+               <p className="text-sm text-slate-500 mb-6 font-medium border-b border-slate-100 pb-6">Blijf op de hoogte van nieuwe reserveringen en inkomende chatberichten.</p>
                
-               <div className="flex items-center justify-between cursor-not-allowed">
-                 <div>
-                   <h3 className="text-base font-bold text-slate-900">E-mail Notificaties</h3>
-                   <p className="text-sm text-slate-500 font-medium mt-1">Stuur mij een e-mail zodra ik een bericht krijg in de Handelspost.</p>
+               <div className="space-y-6">
+                 {/* E-mail Toggle */}
+                 <div className="flex items-center justify-between cursor-pointer group" onClick={() => toggleNotification('email')}>
+                   <div>
+                     <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-600 transition-colors">E-mail Notificaties</h3>
+                     <p className="text-sm text-slate-500 font-medium mt-1">Stuur een e-mail bij nieuwe reserveringen en chatberichten.</p>
+                   </div>
+                   <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border ${emailAlerts ? "bg-amber-500 border-amber-600" : "bg-slate-200 border-slate-300"}`}>
+                     <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${emailAlerts ? "translate-x-6" : ""}`}></div>
+                   </div>
                  </div>
-                 <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border bg-slate-200 border-slate-300`}>
-                   <div className="bg-white w-6 h-6 rounded-full shadow-md"></div>
+
+                 {/* App Push Toggle */}
+                 <div className="flex items-center justify-between cursor-pointer group pt-6 border-t border-slate-50" onClick={() => toggleNotification('push')}>
+                   <div>
+                     <h3 className="text-base font-bold text-slate-900 group-hover:text-amber-600 transition-colors">App Push-berichten</h3>
+                     <p className="text-sm text-slate-500 font-medium mt-1">Ontvang direct een pop-up op je telefoonscherm (via PWA).</p>
+                   </div>
+                   <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border ${pushAlerts ? "bg-emerald-500 border-emerald-600" : "bg-slate-200 border-slate-300"}`}>
+                     <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${pushAlerts ? "translate-x-6" : ""}`}></div>
+                   </div>
                  </div>
                </div>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-6 text-center">Wijzigingen worden direct opgeslagen</p>
             </div>
 
           </div>

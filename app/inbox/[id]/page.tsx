@@ -116,7 +116,7 @@ export default function ChatRoom() {
   }, [params?.id, router]);
 
   // ==========================================
-  // BERICHT VERZENDEN (MET OPTIMISTIC UI)
+  // BERICHT VERZENDEN (MET OPTIMISTIC UI & EMAIL ENGINE)
   // ==========================================
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault(); 
@@ -146,6 +146,7 @@ export default function ChatRoom() {
       }]);
 
       if (partnerProfile && partnerProfile.id) {
+        // 1. Interne Notificatie (Voor het belletje in de Navbar)
         await supabase.from("notifications").insert([{
           user_id: partnerProfile.id,
           type: "chat",
@@ -153,6 +154,20 @@ export default function ChatRoom() {
           content: messageText.length > 40 ? messageText.substring(0, 40) + "..." : messageText,
           link: `/inbox/${order.id}`
         }]);
+
+        // 2. TOP 1% UPGRADE: Vuur de externe E-mail engine af via de achterdeur
+        fetch("/api/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "chat",
+            recipientId: partnerProfile.id,
+            senderName: currentUserName,
+            batchTitle: order.batch_title,
+            messagePreview: messageText.length > 50 ? messageText.substring(0, 50) + "..." : messageText,
+            actionUrl: `/inbox/${order.id}`
+          }),
+        }).catch(err => console.error("E-mail engine kon niet worden gestart:", err));
       }
     } catch (error) {
       console.error("Bericht verzenden mislukt:", error);
