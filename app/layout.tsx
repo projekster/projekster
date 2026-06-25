@@ -18,6 +18,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Projekster",
   },
+  icons: {
+    // TOP 1% FIX: Dit garandeert dat iPhones het juiste logo pakken als ze "Zet op startscherm" gebruiken
+    apple: "/icon-192x192.png",
+  },
   openGraph: {
     title: "Projekster | De Vrije Markt",
     description: "Lokaal verbouwd, direct geleverd. Herwin je waarde op de vrije markt.",
@@ -47,6 +51,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false, // TOP 1% FIX: Voorkomt het irritante inzoomen op mobiel als je dubbeltikt op knoppen
 };
 
 export default function RootLayout({
