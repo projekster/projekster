@@ -2,55 +2,92 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
+// 1. Initialiseer de Motoren
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, { apiVersion: "2026-05-27.dahlia" as any });
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
-// Genereer een onbreekbare, 6-cijferige cryptografische afhaalcode
-function generateQRReleaseCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase(); // Bijv: 'A7F9B2'
-}
+// TOP 1% FIX: Gebruik de Service Role Key. Dit garandeert dat de order altijd
+// succesvol in de database wordt geschreven, ongeacht strikte RLS beveiligingsregels.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const session_id = url.searchParams.get("session_id");
-  const order_id = url.searchParams.get("order_id");
-  const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-
-  if (!session_id || !order_id) return NextResponse.redirect(new URL("/dashboard?error=missing_data", origin));
-
+export async function POST(req: Request) {
   try {
-    // 1. Verifieer bij de Bank (Stripe) of het geld daadwerkelijk binnen is
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const { batchId, buyerId, buyerName, reserveAmount } = await req.json();
 
-    if (session.payment_status === "paid") {
-      
-      const qrCode = generateQRReleaseCode();
+    // 2. Haal de batch veilig op vanuit de server (voorkomt prijs-hacking door de koper)
+    const { data: batch, error: batchError } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
+    if (batchError || !batch) throw new Error("Oogst niet gevonden of geblokkeerd door de maker.");
 
-      // 2. Haal de order op om de voorraad wiskunde te doen
-      const { data: order } = await supabase.from("orders").select("*").eq("id", order_id).single();
-      const { data: batch } = await supabase.from("batches").select("reserved").eq("id", order?.batch_id).single();
-
-      // 3. Vergrendel de order en genereer de QR in de kluis
-      await supabase.from("orders").update({
-        status: "completed",       // Voor Fiat is betaling = geaccepteerd
-        escrow_status: "held",     // Geld zit veilig in de kluis!
-        stripe_payment_intent_id: session.payment_intent as string,
-        qr_release_code: qrCode
-      }).eq("id", order_id);
-
-      // 4. Reserveer de eenheden definitief in de hoofddatabase
-      if (batch && order) {
-        await supabase.from("batches").update({ reserved: batch.reserved + order.amount }).eq("id", order.batch_id);
-      }
-
-      // 5. Stuur de koper naar zijn Dashboard om zijn verse QR-code te zien
-      return NextResponse.redirect(new URL("/dashboard?payment=success", origin));
+    // 3. Spookvoorraad Check (Nieuw in 2.0!)
+    // Voorkom dat iemand de kassa in gaat voor meer eenheden dan er fysiek nog zijn.
+    const availableAmount = batch.total - (batch.reserved || 0);
+    if (reserveAmount > availableAmount) {
+      return NextResponse.json({ error: `Er zijn nog maar ${availableAmount} eenheden beschikbaar.` }, { status: 400 });
     }
 
-    return NextResponse.redirect(new URL("/dashboard?payment=failed", origin));
+    // 4. De Wiskunde (Het 0/5 Model)
+    // Converteer de prijs (bijv "50,00" of "50") naar zuivere centen voor Stripe
+    const rawPrice = parseFloat(batch.price.toString().replace(',', '.').replace(/[^0-9.]/g, ''));
+    const unitPriceInCents = Math.round(rawPrice * 100); 
+    const subTotalInCents = unitPriceInCents * reserveAmount;
+    
+    // 5% Platform Fee (Jouw netwerk winst)
+    const platformFeeInCents = Math.round(subTotalInCents * 0.05);
 
-  } catch (error) {
-    console.error("⚠️ Fout bij afhandelen succesvolle betaling:", error);
-    return NextResponse.redirect(new URL("/dashboard?error=system_fault", origin));
+    // 5. Maak de Order aan in Supabase (Status: Wachtend op de kluis)
+    const { data: order, error: orderError } = await supabaseAdmin.from("orders").insert([{
+      batch_id: batch.id,
+      buyer_id: buyerId,
+      buyer_name: buyerName,
+      seller_name: batch.maker,
+      batch_title: batch.title,
+      amount: reserveAmount,
+      trade_type: "fiat",
+      status: "pending", 
+      escrow_status: "awaiting_payment"
+    }]).select().single();
+
+    if (orderError) throw orderError;
+
+    // 6. Bouw de Stripe Checkout Sessie (iDEAL, Bancontact, Creditcard)
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.projekster.com';
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['ideal', 'bancontact', 'card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: { name: `Oogst: ${batch.title} (${reserveAmount} ${batch.unit || 'stuks'})` },
+            unit_amount: unitPriceInCents,
+          },
+          quantity: reserveAmount,
+        },
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: { 
+              name: "Projekster Kluis & Netwerk Garantie",
+              description: "Beveiligde Escrow tot QR-overdracht & 100% lokaal netwerkbehoud."
+            },
+            unit_amount: platformFeeInCents,
+          },
+          quantity: 1, 
+        }
+      ],
+      mode: 'payment',
+      // We koppelen het Order ID aan de URL zodat de success-route hem kan verzegelen
+      success_url: `${origin}/api/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
+      cancel_url: `${origin}/batch/${batch.id}?payment=cancelled`, // Stuur netjes terug als ze annuleren
+      metadata: { order_id: order.id, batch_id: batch.id }
+    });
+
+    return NextResponse.json({ url: session.url });
+    
+  } catch (error: any) {
+    console.error("⚠️ Stripe Checkout Fout:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
