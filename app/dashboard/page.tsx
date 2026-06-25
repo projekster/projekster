@@ -11,35 +11,17 @@ import QRCode from "react-qr-code";
 // 1. DATAMODELLEN
 // ==========================================
 interface Batch {
-  id: string;
-  type: string;
-  title: string;
-  maker: string;
-  category: string;
-  reserved: number;
-  total: number;
-  days_left: number;
-  price?: string;
-  allows_trade?: boolean;
-  image_url?: string;
-  location?: string;
-  unit?: string;
-  created_at?: string;
+  id: string; type: string; title: string; maker: string; category: string;
+  reserved: number; total: number; days_left: number; price?: string;
+  allows_trade?: boolean; image_url?: string; location?: string;
+  unit?: string; created_at?: string;
 }
 
 interface Order {
-  id: string;
-  batch_id: string;
-  buyer_name: string;
-  seller_name: string;
-  batch_title: string;
-  amount: number;
-  trade_type: string;
-  trade_offer?: string;
+  id: string; batch_id: string; buyer_name: string; seller_name: string;
+  batch_title: string; amount: number; trade_type: string; trade_offer?: string;
   status: 'pending' | 'accepted' | 'completed' | 'rejected';
-  escrow_status?: string; 
-  qr_release_code?: string;
-  created_at: string;
+  escrow_status?: string; qr_release_code?: string; created_at: string;
 }
 
 export default function Dashboard() {
@@ -53,6 +35,7 @@ export default function Dashboard() {
   const [stripeOnboarded, setStripeOnboarded] = useState(false);
   const [stripeAccountId, setStripeAccountId] = useState("");
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isLoggingInStripe, setIsLoggingInStripe] = useState(false);
   
   // Handel States
   const [myBatches, setMyBatches] = useState<Batch[]>([]);
@@ -60,8 +43,14 @@ export default function Dashboard() {
   const [outgoingOrders, setOutgoingOrders] = useState<Order[]>([]);
   const [ratedOrderIds, setRatedOrderIds] = useState<string[]>([]);
 
+  // Notificatie Voorkeuren
+  const [emailAlerts, setEmailAlerts] = useState(true);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"aanbod" | "investeringen">("aanbod");
+  
+  // De Nieuwe Navigatie Structuur
+  const [viewMode, setViewMode] = useState<"aanbod" | "investeringen" | "instellingen">("aanbod");
   
   // Modals
   const [batchToDelete, setBatchToDelete] = useState<Batch | null>(null);
@@ -69,15 +58,12 @@ export default function Dashboard() {
   const [qrOrder, setQrOrder] = useState<Order | null>(null);
 
   // ==========================================
-  // 2. DATA SYNCHRONISATIE & AUTH
+  // 2. DATA SYNCHRONISATIE
   // ==========================================
   useEffect(() => {
     async function fetchDashboardData() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { 
-        router.push("/login"); 
-        return; 
-      }
+      if (!session) { router.push("/login"); return; }
       
       setCurrentUserId(session.user.id);
       setCurrentUserEmail(session.user.email || "");
@@ -103,16 +89,14 @@ export default function Dashboard() {
           const { data: ratingsData } = await supabase.from("trust_ratings").select("order_id").eq("reviewer_id", session.user.id);
           if (ratingsData) setRatedOrderIds(ratingsData.map(r => r.order_id));
 
-          // ----------------------------------------------------------------
-          // DE ONZICHTBARE VERIFICATIE CHECK (Als ze terugkomen van Stripe)
-          // ----------------------------------------------------------------
+          // Verificatie Check (Terugkomst van Stripe KYC)
           const searchParams = new URLSearchParams(window.location.search);
           const activeStripeId = profileData?.stripe_account_id || "";
           
           if (searchParams.get("onboarding") === "success" && activeStripeId) {
+             setViewMode("instellingen"); 
              fetch("/api/stripe/verify", {
-               method: "POST",
-               headers: { "Content-Type": "application/json" },
+               method: "POST", headers: { "Content-Type": "application/json" },
                body: JSON.stringify({ accountId: activeStripeId, userId: session.user.id })
              })
              .then(res => res.json())
@@ -121,105 +105,91 @@ export default function Dashboard() {
                  setStripeOnboarded(true); 
                  router.replace('/dashboard'); 
                } else {
-                 alert("Je hebt niet alle gegevens bij de bank ingevuld. De verificatie is afgebroken.");
+                 alert("Je hebt niet alle KYC gegevens bij de bank ingevuld. De verificatie is afgebroken.");
                  router.replace('/dashboard');
                }
-             })
-             .catch(err => console.error("Verificatie fout:", err));
+             }).catch(err => console.error("Verificatie fout:", err));
           }
         }
-      } catch (error) { 
-        console.error("Fout bij synchronisatie:", error); 
-      } finally { 
-        setIsLoading(false); 
-      }
+      } catch (error) { console.error("Fout bij synchronisatie:", error); } 
+      finally { setIsLoading(false); }
     }
     fetchDashboardData();
   }, [router]);
 
   // ==========================================
-  // 3. STRIPE ONBOARDING MOTOR (MET TITANIUM FOUTAFHANDELING)
+  // 3. STRIPE FINANCIËN & KYC MOTOR
   // ==========================================
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);
     try {
       const response = await fetch("/api/stripe/onboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: currentUserEmail,
-          stripeAccountId: stripeAccountId,
-          returnUrl: window.location.origin,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: currentUserEmail, stripeAccountId: stripeAccountId, returnUrl: window.location.origin }),
       });
       
-      // Top 1% Hack: Voorkom vastlopers door EERST te checken of we überhaupt JSON terugkrijgen
       const text = await response.text();
       let data;
-      try {
-        data = JSON.parse(text);
-      } catch (err) {
-        console.error("Ruwe Server Error:", text);
-        throw new Error("De server gaf een fatale fout terug. Check of je Stripe API keys in Vercel staan.");
-      }
+      try { data = JSON.parse(text); } 
+      catch (err) { throw new Error("De server gaf een fatale fout terug. Check of je Stripe API keys in Vercel staan."); }
       
-      if (!response.ok) {
-        throw new Error(data.error || `Server foutcode: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(data.error || `Server foutcode: ${response.status}`);
 
       if (data.url) {
-        // Sla het ID op zodat we de boer niet kwijtraken als hij de bank app wegklikt
         if (data.accountId && !stripeAccountId) {
           await supabase.from("profiles").update({ stripe_account_id: data.accountId }).eq("id", currentUserId);
         }
         window.location.href = data.url; 
-      } else {
-        throw new Error("Geen geldige URL ontvangen van Stripe.");
-      }
-    } catch (error: any) {
-      console.error("Stripe Dashboard Error:", error);
-      alert(`Connectiefout: ${error.message}`);
-    } finally {
-      setIsConnectingStripe(false); // Zorgt ervoor dat de knop weer klikbaar wordt
-    }
+      } else { throw new Error("Geen geldige KYC URL ontvangen van Stripe."); }
+    } catch (error: any) { alert(`KYC Connectiefout: ${error.message}`); } 
+    finally { setIsConnectingStripe(false); }
+  };
+
+  const handleStripeLogin = async () => {
+    setIsLoggingInStripe(true);
+    try {
+      const response = await fetch("/api/stripe/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: stripeAccountId }),
+      });
+      const data = await response.json();
+      if (data.url) window.open(data.url, '_blank');
+      else throw new Error(data.error || "Kan dashboard niet laden.");
+    } catch (error: any) { alert(`Fout: ${error.message}`); } 
+    finally { setIsLoggingInStripe(false); }
   };
 
   // ==========================================
-  // 4. FYSIEKE AFHANDELING (NATURA)
+  // 4. INSTELLINGEN OPSLAAN
+  // ==========================================
+  const saveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      await supabase.from("profiles").update({ display_name: makerName }).eq("id", currentUserId);
+      alert("Instellingen succesvol opgeslagen.");
+    } catch (error) { alert("Kon instellingen niet opslaan."); }
+    finally { setIsSavingSettings(false); }
+  };
+
+  // ==========================================
+  // 5. FYSIEKE AFHANDELING & ERECODE
   // ==========================================
   const handleCompleteNaturaTrade = async (order: Order) => {
     if(!confirm("Weet je zeker dat de goederen fysiek zijn overgedragen? Dit sluit de transactie definitief af.")) return;
-    
     try {
       await supabase.from("orders").update({ status: "completed" }).eq("id", order.id);
       setIncomingOrders(incomingOrders.map(o => o.id === order.id ? { ...o, status: "completed" } : o));
-    } catch (error) {
-      console.error("Fout bij afronden Natura ruil:", error);
-    }
+    } catch (error) { console.error("Fout bij afronden Natura ruil:", error); }
   };
 
-  const handleOpenChat = (orderId: string) => {
-    router.push(`/inbox/${orderId}`);
-  };
-
-  // ==========================================
-  // 5. ERECODE MATRIX
-  // ==========================================
   const handleRateTransaction = async (orderId: string, targetName: string, score: number) => {
     try {
-      const { error } = await supabase.from("trust_ratings").insert([{
-        order_id: orderId, reviewer_id: currentUserId, target_name: targetName, score: score
-      }]);
+      const { error } = await supabase.from("trust_ratings").insert([{ order_id: orderId, reviewer_id: currentUserId, target_name: targetName, score: score }]);
       if (error) throw error;
       setRatedOrderIds([...ratedOrderIds, orderId]);
-    } catch (error: any) {
-      alert("Systeemfout of je hebt al gestemd op deze transactie.");
-    }
+    } catch (error: any) { alert("Systeemfout of je hebt al gestemd."); }
   };
 
-  // ==========================================
-  // 6. VOORRAAD VERNIETIGING
-  // ==========================================
   const executeDelete = async () => {
     if (!batchToDelete) return;
     setIsDeleting(true);
@@ -238,9 +208,7 @@ export default function Dashboard() {
     return (
       <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 uppercase tracking-widest font-black text-xs animate-pulse">
-          Handelspost synchroniseren...
-        </p>
+        <p className="text-slate-500 uppercase tracking-widest font-black text-xs animate-pulse">Handelspost synchroniseren...</p>
       </main>
     );
   }
@@ -251,35 +219,28 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 pt-8 relative">
       
-      {/* --- MODAL: QR CODE KOPER --- */}
+      {/* MODALS (QR & DELETE) */}
       {qrOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-8 shadow-2xl relative flex flex-col items-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl relative flex flex-col items-center">
             <button onClick={() => setQrOrder(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 text-xl font-black">&times;</button>
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-1">Afhaal Bewijs</h3>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8 text-center">{qrOrder.batch_title}</p>
-            
-            <div className="bg-white p-4 rounded-2xl border-4 border-slate-900 shadow-sm mb-6">
-              <QRCode value={qrOrder.qr_release_code || qrOrder.id} size={200} level="H" />
-            </div>
-            
-            <p className="text-center text-sm font-medium text-slate-600 mb-6">
-              Laat deze code scannen door <strong className="text-slate-900">{qrOrder.seller_name}</strong> bij het ophalen. Na de scan wordt je betaling definitief vrijgegeven.
-            </p>
-            <button onClick={() => setQrOrder(null)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-4 rounded-xl transition-colors">Sluiten</button>
+            <div className="bg-white p-4 rounded-2xl border-4 border-slate-900 shadow-sm mb-6"><QRCode value={qrOrder.qr_release_code || qrOrder.id} size={200} level="H" /></div>
+            <p className="text-center text-sm font-medium text-slate-600 mb-6">Laat deze code scannen door <strong className="text-slate-900">{qrOrder.seller_name}</strong> bij het ophalen. Na de scan wordt je betaling definitief vrijgegeven.</p>
+            <button onClick={() => setQrOrder(null)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-4 rounded-xl">Sluiten</button>
           </div>
         </div>
       )}
 
-      {/* --- MODAL: VERWIJDER BATCH --- */}
       {batchToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-8 shadow-2xl relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
             <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100 text-3xl">⚠️</div>
             <h3 className="text-2xl font-black text-slate-900 text-center uppercase tracking-tight mb-2">Bevestig Vernietiging</h3>
             <p className="text-slate-500 text-center text-sm mb-8 font-medium">Weet je zeker dat je <strong className="text-slate-900">"{batchToDelete.title}"</strong> wilt verwijderen?</p>
             <div className="flex gap-3">
-              <button disabled={isDeleting} onClick={() => setBatchToDelete(null)} className="w-1/2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold uppercase tracking-widest py-4 rounded-xl">Annuleren</button>
+              <button disabled={isDeleting} onClick={() => setBatchToDelete(null)} className="w-1/2 bg-white hover:bg-slate-50 border border-slate-300 text-xs font-bold uppercase tracking-widest py-4 rounded-xl">Annuleren</button>
               <button disabled={isDeleting} onClick={executeDelete} className="w-1/2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-widest py-4 rounded-xl shadow-md">{isDeleting ? "Wissen..." : "Vernietigen"}</button>
             </div>
           </div>
@@ -288,8 +249,8 @@ export default function Dashboard() {
 
       <div className="max-w-[1400px] mx-auto px-4 md:px-6">
         
-        {/* --- HEADER --- */}
-        <div className="flex flex-col gap-8 mb-12">
+        {/* HEADER & TABS */}
+        <div className="flex flex-col gap-8 mb-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
               <h1 className="text-4xl md:text-5xl font-black text-slate-900 uppercase tracking-tight mb-2">Mijn Handel</h1>
@@ -297,19 +258,23 @@ export default function Dashboard() {
                 <span>🌾</span> Handelaar: <strong className="text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{makerName}</strong>
               </p>
             </div>
-            <Link href="/maak-batch" className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs py-4 px-6 rounded-xl transition-all shadow-md text-center inline-block">
+            <Link href="/maak-batch" className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs py-4 px-6 rounded-xl transition-all shadow-md text-center">
               + Nieuwe Oogst Toevoegen
             </Link>
           </div>
 
-          <div className="flex gap-2 border-b border-slate-200 pb-0">
-            <button onClick={() => setViewMode("aanbod")} className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "aanbod" ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}>
-              Mijn Aanbod (Verkoop)
+          <div className="flex gap-2 border-b border-slate-200 pb-0 overflow-x-auto scrollbar-none">
+            <button onClick={() => setViewMode("aanbod")} className={`whitespace-nowrap px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "aanbod" ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}>
+              Mijn Aanbod
               {viewMode === "aanbod" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-slate-900"></div>}
             </button>
-            <button onClick={() => setViewMode("investeringen")} className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "investeringen" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}>
-              Mijn Reserveringen (Aankoop)
+            <button onClick={() => setViewMode("investeringen")} className={`whitespace-nowrap px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "investeringen" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}>
+              Mijn Reserveringen
               {viewMode === "investeringen" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-emerald-500"></div>}
+            </button>
+            <button onClick={() => setViewMode("instellingen")} className={`whitespace-nowrap px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "instellingen" ? "text-blue-600" : "text-slate-400 hover:text-slate-600"}`}>
+              ⚙️ Instellingen & KYC
+              {viewMode === "instellingen" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-blue-600"></div>}
             </button>
           </div>
         </div>
@@ -319,27 +284,6 @@ export default function Dashboard() {
         {/* ========================================================== */}
         {viewMode === "aanbod" && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            
-            {/* STRIPE ONBOARDING BANNER */}
-            {myBatches.length > 0 && !stripeOnboarded && (
-              <div className="mb-10 bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-                <div>
-                  <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight mb-2 flex items-center gap-2"><span>🏦</span> Activeer Fiat Betalingen</h3>
-                  <p className="text-amber-700 text-sm font-medium leading-relaxed max-w-2xl">
-                    Om euro's te kunnen ontvangen van kopers, moet je eenmalig je bankrekening koppelen via onze beveiligde partner Stripe. Zonder koppeling kunnen kopers jouw voorraad niet met fiat reserveren.
-                  </p>
-                </div>
-                <button 
-                  onClick={handleStripeConnect} 
-                  disabled={isConnectingStripe}
-                  className="w-full md:w-auto bg-amber-600 hover:bg-amber-500 disabled:bg-amber-300 text-white font-bold uppercase tracking-widest text-xs px-8 py-4 rounded-xl shadow-md transition-all whitespace-nowrap"
-                >
-                  {isConnectingStripe ? "Verbinden..." : "Koppel Bankrekening"}
-                </button>
-              </div>
-            )}
-
-            {/* INKOMENDE ORDERS */}
             {incomingOrders.length > 0 && (
               <div className="mb-16">
                 <div className="border-b border-slate-200 pb-4 mb-6">
@@ -347,57 +291,38 @@ export default function Dashboard() {
                     <span className="w-3 h-3 rounded-full bg-slate-900 animate-pulse"></span> Actieve Bestellingen
                   </h2>
                 </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   {incomingOrders.map((order) => (
                     <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative flex flex-col justify-between">
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${order.status === 'completed' ? 'bg-slate-300' : order.trade_type === 'fiat' ? 'bg-blue-500' : 'bg-amber-500'}`}></div>
-                      
                       <div className="pl-2 mb-6">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                          {order.trade_type === "fiat" ? "💶 Fiat" : "🔄 Natura"} • {order.status === 'completed' ? 'Afgerond' : order.status === 'accepted' ? 'Akkoord' : 'Nieuw Verzoek'}
-                        </p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{order.trade_type === "fiat" ? "💶 Fiat" : "🔄 Natura"} • {order.status === 'completed' ? 'Afgerond' : order.status === 'accepted' ? 'Akkoord' : 'Nieuw Verzoek'}</p>
                         <h3 className="text-lg font-bold text-slate-900 mb-4">{order.batch_title}</h3>
-                        
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                          <p className="text-sm text-slate-600 font-medium">
-                            <strong className="text-slate-900">{order.buyer_name}</strong> {order.status === 'completed' ? 'heeft overgenomen:' : 'wil overnemen:'} <strong className="text-slate-900">{order.amount || 1} eenheden</strong>.
-                          </p>
+                          <p className="text-sm text-slate-600 font-medium"><strong className="text-slate-900">{order.buyer_name}</strong> wil overnemen: <strong className="text-slate-900">{order.amount || 1} eenheden</strong>.</p>
                         </div>
                       </div>
-
-                      {/* LOGICA: Knoppen gebaseerd op Fiat of Natura */}
                       <div className="flex flex-col gap-3 mt-auto pl-2">
-                         {/* NATURA FLOW */}
                          {order.trade_type === 'trade' && (order.status === "pending" || order.status === "accepted") && (
                            <div className="flex gap-2">
-                             <button onClick={() => handleOpenChat(order.id)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">💬 Chat</button>
-                             {order.status === "accepted" && (
-                               <button onClick={() => handleCompleteNaturaTrade(order)} className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md transition-colors">📦 Markeer als Overhandigd</button>
-                             )}
+                             <button onClick={() => router.push(`/inbox/${order.id}`)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl">💬 Chat</button>
+                             {order.status === "accepted" && <button onClick={() => handleCompleteNaturaTrade(order)} className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md">📦 Overhandigd</button>}
                            </div>
                          )}
-
-                         {/* FIAT FLOW */}
                          {order.trade_type === 'fiat' && order.status !== 'completed' && order.escrow_status !== 'released' && (
                            <div className="flex gap-2">
-                              <button onClick={() => handleOpenChat(order.id)} className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">💬 Chat</button>
-                              <button onClick={() => router.push(`/scan/${order.id}`)} className="w-2/3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2"><span>📷</span> Scan Afhaal-QR</button>
+                              <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl">💬 Chat</button>
+                              <button onClick={() => router.push(`/scan/${order.id}`)} className="w-2/3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md"><span>📷</span> Scan Afhaal-QR</button>
                            </div>
                          )}
-
-                         {/* ERECODE MATRIX */}
                          {order.status === "completed" && !ratedOrderIds.includes(order.id) && (
-                           <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center animate-in zoom-in-95 mt-2">
+                           <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center mt-2">
                              <p className="text-xs text-slate-500 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Koper</p>
                              <div className="flex gap-2">
                                <button onClick={() => handleRateTransaction(order.id, order.buyer_name, -1)} className="w-1/2 bg-red-50 text-red-600 hover:bg-red-100 font-bold py-2 rounded-lg text-sm border border-red-200 transition-colors shadow-sm">-1 (Slecht)</button>
                                <button onClick={() => handleRateTransaction(order.id, order.buyer_name, 1)} className="w-1/2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-bold py-2 rounded-lg text-sm border border-emerald-200 transition-colors shadow-sm">+1 (Top)</button>
                              </div>
                            </div>
-                         )}
-                         {order.status === "completed" && ratedOrderIds.includes(order.id) && (
-                           <div className="w-full text-center py-2 mt-2 text-xs text-slate-400 font-bold uppercase tracking-widest">✅ Beoordeling verwerkt</div>
                          )}
                       </div>
                     </div>
@@ -406,7 +331,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* MIJN ACTUELE VOORRAAD */}
             <div className="space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight"><span>📜</span> Mijn Voorraad</h2>
@@ -415,28 +339,11 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
                   {myBatches.map((batch) => (
                     <div key={batch.id} className="relative group h-full">
-                      <BatchCard 
-                        id={batch.id} 
-                        title={batch.title} 
-                        maker={batch.maker} 
-                        reserved={batch.reserved} 
-                        total={batch.total} 
-                        category={batch.category} 
-                        daysLeft={batch.days_left}
-                        price={batch.price}
-                        allows_trade={batch.allows_trade}
-                        image_url={batch.image_url} 
-                        location={batch.location} 
-                        unit={batch.unit} 
-                        created_at={batch.created_at} 
-                      />
-                      
+                      <BatchCard {...batch} daysLeft={batch.days_left} />
                       <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
-                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
+                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
                         {batch.reserved > 0 ? (
-                          <div className="w-full text-center group/lock relative">
-                            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
-                          </div>
+                          <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
                         ) : (
                           <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
                         )}
@@ -455,14 +362,11 @@ export default function Dashboard() {
         )}
 
         {/* ========================================================== */}
-        {/* VIEW 2: MIJN RESERVERINGEN (De Koper's Kant)               */}
+        {/* VIEW 2: MIJN RESERVERINGEN (AANKOPEN)                      */}
         {/* ========================================================== */}
         {viewMode === "investeringen" && (
           <div className="animate-in fade-in slide-in-from-left-4 duration-300 space-y-6">
-            <div className="border-b border-slate-200 pb-4">
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight"><span>📦</span> Lopende Reserveringen</h2>
-            </div>
-
+            <div className="border-b border-slate-200 pb-4"><h2 className="text-xl font-black text-slate-900 uppercase tracking-tight"><span>📦</span> Lopende Reserveringen</h2></div>
             {outgoingOrders.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {outgoingOrders.map(order => (
@@ -470,35 +374,13 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Bij: <span className="text-slate-900">{order.seller_name}</span></p>
                       <h3 className="text-lg font-bold text-slate-900 mb-4">{order.batch_title}</h3>
-                      
                       <div className="mb-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                         <div className="flex justify-between text-sm">
-                            <span className="text-slate-500 font-medium">Gereserveerd:</span>
-                            <span className="text-slate-900 font-bold">{order.amount || 1} {order.trade_type === 'fiat' ? 'Eenheden' : 'Eenheden (Ruil)'}</span>
-                         </div>
-                         <div className="flex justify-between text-sm items-center">
-                            <span className="text-slate-500 font-medium">Status:</span>
-                            {order.status === 'pending' && <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs border border-amber-100">Wacht op reactie</span>}
-                            {order.status === 'accepted' && <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded text-xs border border-emerald-100">Geaccepteerd</span>}
-                            {order.status === 'completed' && <span className="text-slate-500 font-bold bg-slate-200 px-2 py-1 rounded text-xs border border-slate-300">Afgehandeld</span>}
-                         </div>
+                         <div className="flex justify-between text-sm"><span className="text-slate-500 font-medium">Gereserveerd:</span><span className="text-slate-900 font-bold">{order.amount || 1} {order.trade_type === 'fiat' ? 'Eenheden' : 'Eenheden (Ruil)'}</span></div>
                       </div>
                     </div>
-
                     <div className="mt-auto flex flex-col gap-2">
-                      {order.status !== 'completed' && (
-                        <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-sm">
-                          💬 Open Chat
-                        </button>
-                      )}
-
-                      {/* DE FIAT QR KNOP VOOR DE KOPER */}
-                      {order.trade_type === 'fiat' && order.status !== 'completed' && (
-                        <button onClick={() => setQrOrder(order)} className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
-                          <span>📱</span> Toon Afhaal-QR
-                        </button>
-                      )}
-
+                      {order.status !== 'completed' && <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">💬 Open Chat</button>}
+                      {order.trade_type === 'fiat' && order.status !== 'completed' && <button onClick={() => setQrOrder(order)} className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md"><span>📱</span> Toon Afhaal-QR</button>}
                       {order.status === 'completed' && !ratedOrderIds.includes(order.id) && (
                         <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center mt-2">
                           <p className="text-[10px] text-slate-500 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Maker</p>
@@ -513,11 +395,98 @@ export default function Dashboard() {
                 ))}
               </div>
             ) : (
-              <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm">
-                <h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">Geen actieve reserveringen</h3>
-                <Link href="/#aanbod" className="text-slate-600 hover:text-slate-900 text-xs font-black uppercase tracking-widest underline mt-2 inline-block">Verken de markt</Link>
-              </div>
+              <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm"><h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">Geen actieve reserveringen</h3></div>
             )}
+          </div>
+        )}
+
+        {/* ========================================================== */}
+        {/* VIEW 3: INSTELLINGEN & KYC (NIEUW!)                        */}
+        {/* ========================================================== */}
+        {viewMode === "instellingen" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8 max-w-4xl">
+            
+            {/* KAART 1: FINANCIËN & KYC */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+               <div className="flex items-center gap-3 mb-2">
+                 <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl border border-blue-100">🏦</div>
+                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Financiën & KYC</h2>
+               </div>
+               <p className="text-sm text-slate-500 mb-6 font-medium border-b border-slate-100 pb-6">
+                 Beheer je bankkoppeling en ontvangst van fiat-betalingen. Wij maken gebruik van Stripe Connect voor veilige, gecertificeerde uitbetalingen (Know Your Customer).
+               </p>
+
+               {stripeOnboarded ? (
+                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                   <div className="flex items-center gap-4">
+                     <span className="text-4xl">✅</span>
+                     <div>
+                       <h3 className="font-bold text-emerald-900 text-lg uppercase tracking-tight">Identiteit Geverifieerd</h3>
+                       <p className="text-sm text-emerald-700 font-medium mt-1">Jouw account is succesvol gekoppeld en kan fiat-betalingen ontvangen.</p>
+                     </div>
+                   </div>
+                   <button onClick={handleStripeLogin} disabled={isLoggingInStripe} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl transition-all shadow-md whitespace-nowrap">
+                     {isLoggingInStripe ? "Laden..." : "Beheer Bankzaken"}
+                   </button>
+                 </div>
+               ) : (
+                 <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                   <div className="flex items-center gap-4">
+                     <span className="text-4xl animate-pulse">⚠️</span>
+                     <div>
+                       <h3 className="font-bold text-amber-900 text-lg uppercase tracking-tight">Verificatie Vereist</h3>
+                       <p className="text-sm text-amber-700 font-medium mt-1">Om via iDEAL/Bancontact betaald te worden, is een bankkoppeling verplicht.</p>
+                     </div>
+                   </div>
+                   <button onClick={handleStripeConnect} disabled={isConnectingStripe} className="w-full md:w-auto bg-amber-600 hover:bg-amber-500 disabled:bg-amber-300 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl transition-all shadow-md whitespace-nowrap">
+                     {isConnectingStripe ? "Verbinden..." : "Start KYC Verificatie"}
+                   </button>
+                 </div>
+               )}
+            </div>
+
+            {/* KAART 2: PROFIEL */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+               <div className="flex items-center gap-3 mb-2">
+                 <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xl border border-slate-200">👨‍🌾</div>
+                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Mijn Profiel</h2>
+               </div>
+               <p className="text-sm text-slate-500 mb-6 font-medium border-b border-slate-100 pb-6">Deze gegevens zijn zichtbaar voor kopers op het netwerk.</p>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                 <div className="space-y-3">
+                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Handelsnaam / Pseudoniem</label>
+                   <input type="text" value={makerName} onChange={(e) => setMakerName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-bold focus:outline-none focus:border-blue-500 transition-all shadow-inner" />
+                 </div>
+                 <div className="space-y-3">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">E-mailadres (Geverifieerd)</label>
+                   <input type="text" disabled value={currentUserEmail} className="w-full bg-slate-100 border border-slate-200 rounded-xl p-4 text-slate-500 font-bold cursor-not-allowed" />
+                 </div>
+               </div>
+               <button onClick={saveSettings} disabled={isSavingSettings} className="bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl transition-all shadow-md">
+                 {isSavingSettings ? "Opslaan..." : "Gegevens Bijwerken"}
+               </button>
+            </div>
+
+            {/* KAART 3: NOTIFICATIES */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm opacity-60">
+               <div className="flex items-center gap-3 mb-2">
+                 <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xl border border-slate-200">🔔</div>
+                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Communicatie Voorkeuren</h2>
+               </div>
+               <p className="text-sm text-slate-500 mb-6 font-medium border-b border-slate-100 pb-6">Binnenkort beschikbaar: Ontvang e-mails bij nieuwe chats of reserveringen.</p>
+               
+               <div className="flex items-center justify-between cursor-not-allowed">
+                 <div>
+                   <h3 className="text-base font-bold text-slate-900">E-mail Notificaties</h3>
+                   <p className="text-sm text-slate-500 font-medium mt-1">Stuur mij een e-mail zodra ik een bericht krijg in de Handelspost.</p>
+                 </div>
+                 <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border bg-slate-200 border-slate-300`}>
+                   <div className="bg-white w-6 h-6 rounded-full shadow-md"></div>
+                 </div>
+               </div>
+            </div>
+
           </div>
         )}
 
