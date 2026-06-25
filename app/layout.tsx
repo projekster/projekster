@@ -110,11 +110,18 @@ export default function RootLayout({
 
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-400 font-medium">
-              <p>&copy; {new Date().getFullYear()} Projekster Netwerk. Alle rechten voorbehouden aan de makers.</p>
-              <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-8 border-t border-slate-100">
+              <div className="flex flex-col md:flex-row items-center gap-2 md:gap-6 text-xs text-slate-400 font-medium">
+                <p>&copy; {new Date().getFullYear()} Projekster Netwerk. Alle rechten voorbehouden.</p>
+                <div className="flex items-center gap-4">
+                  <Link href="/voorwaarden" className="hover:text-amber-600 transition-colors">Algemene Voorwaarden</Link>
+                  <span>&bull;</span>
+                  <Link href="/privacy" className="hover:text-amber-600 transition-colors">Privacybeleid</Link>
+                </div>
+              </div>
+              <div className="flex gap-4 text-xs font-bold text-slate-500">
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> 
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> 
                   Netwerk Status: Actief & Stabiel
                 </span>
               </div>
