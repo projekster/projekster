@@ -3,34 +3,71 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Scanner } from "@yudiel/react-qr-scanner"; // De geavanceerde camera engine
+import { Scanner } from "@yudiel/react-qr-scanner";
+import { supabase } from "../../utils/supabase";
 
 export default function ScanPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = params?.id as string;
 
+  // States voor Scanner & Transactie
   const [manualCode, setManualCode] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [cameraActive, setCameraActive] = useState(true);
 
-  // De functie die bliksemsnel vuurt als de QR code het vizier raakt
+  // States voor Order Context
+  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [isLoadingContext, setIsLoadingContext] = useState(true);
+
+  // ==========================================
+  // 1. HAAL CONTEXT OP (Voorkomt blinde scans)
+  // ==========================================
+  useEffect(() => {
+    async function fetchOrderContext() {
+      if (!orderId) return;
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("batch_title, buyer_name, amount, escrow_status")
+          .eq("id", orderId)
+          .single();
+          
+        if (error) throw error;
+        setOrderDetails(data);
+
+        // Als de order al is vrijgegeven, direct naar succes scherm
+        if (data.escrow_status === "released") {
+          setSuccess(true);
+          setCameraActive(false);
+        }
+      } catch (error) {
+        console.error("Kon order niet vinden:", error);
+        setErrorMsg("Ordergegevens konden niet worden geladen.");
+      } finally {
+        setIsLoadingContext(false);
+      }
+    }
+    fetchOrderContext();
+  }, [orderId]);
+
+  // ==========================================
+  // 2. SCAN & VERIFICATIE LOGICA
+  // ==========================================
   const handleScan = async (detectedCode: string) => {
     if (isProcessing || success) return;
-    setCameraActive(false); // Blokkeer de camera direct om dubbele server-calls te voorkomen
+    setCameraActive(false); // Blokkeer de camera direct om dubbele calls te voorkomen
     processRelease(detectedCode);
   };
 
-  // De fallback voor als de camera faalt
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualCode.trim() || isProcessing) return;
     processRelease(manualCode.trim().toUpperCase());
   };
 
-  // De cryptografische communicatie met jouw API
   const processRelease = async (code: string) => {
     setIsProcessing(true);
     setErrorMsg("");
@@ -45,7 +82,7 @@ export default function ScanPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Fout bij communicatie met de kluis.");
+        throw new Error(data.error || "Fout bij communicatie met het netwerk.");
       }
 
       setSuccess(true);
@@ -58,7 +95,19 @@ export default function ScanPage() {
   };
 
   // ==========================================
-  // VIEW 1: SUCCES SCHERM (Geld is overgemaakt)
+  // VIEW 1: LAADSCHERM
+  // ==========================================
+  if (isLoadingContext) {
+    return (
+      <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-emerald-500 font-bold uppercase tracking-widest text-xs animate-pulse">Beveiligde omgeving laden...</p>
+      </main>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: SUCCES SCHERM (Geld is overgemaakt)
   // ==========================================
   if (success) {
     return (
@@ -69,7 +118,7 @@ export default function ScanPage() {
           </div>
           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Geld Vrijgegeven!</h1>
           <p className="text-slate-600 font-medium mb-8 leading-relaxed">
-            De code is geverifieerd. 100% van het afgesproken bedrag is direct uit de Stripe-kluis naar je bankrekening overgemaakt. 
+            De code is geverifieerd. 100% van het afgesproken bedrag is direct uit de Projekster Escrow naar je bankrekening overgemaakt. 
             <br/><br/>Je kunt de goederen nu met een gerust hart overhandigen.
           </p>
           <button 
@@ -84,7 +133,7 @@ export default function ScanPage() {
   }
 
   // ==========================================
-  // VIEW 2: SCANNER & VIZIER
+  // VIEW 3: SCANNER & VIZIER
   // ==========================================
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -101,9 +150,24 @@ export default function ScanPage() {
 
       <div className="flex-grow flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full">
         
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-black uppercase tracking-tight text-white mb-2">Scan Afhaalbewijs</h2>
-          <p className="text-slate-400 text-sm font-medium">Vraag de koper om de QR-code in zijn dashboard te openen.</p>
+        {/* ORDER CONTEXT */}
+        <div className="text-center mb-6 w-full">
+          <h2 className="text-2xl font-black uppercase tracking-tight text-white mb-3">Scan Afhaalbewijs</h2>
+          
+          {orderDetails ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 inline-block text-left shadow-lg w-full max-w-sm">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Je staat op het punt te leveren aan:</p>
+              <p className="text-emerald-400 font-black mb-2 text-lg">{orderDetails.buyer_name}</p>
+              <p className="text-sm font-medium text-slate-300">
+                Oogst: <strong className="text-white">{orderDetails.batch_title}</strong>
+              </p>
+              <p className="text-sm font-medium text-slate-300">
+                Aantal: <strong className="text-white">{orderDetails.amount} eenheden</strong>
+              </p>
+            </div>
+          ) : (
+             <p className="text-slate-400 text-sm font-medium">Vraag de koper om de QR-code in zijn dashboard te openen.</p>
+          )}
         </div>
 
         {/* CAMERA VIEWPORT MET VIZIER */}
@@ -112,12 +176,12 @@ export default function ScanPage() {
             <Scanner 
               onScan={(result) => handleScan(result[0].rawValue)} 
               onError={(error) => console.log("Camera error:", error?.message)}
-              components={{ finder: false }} /* DE FIX: 'audio' is hier verwijderd */
+              components={{ finder: false }} 
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-50">
               <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-emerald-500 font-bold uppercase tracking-widest text-xs animate-pulse">Code ontcijferen...</p>
+              <p className="text-emerald-500 font-bold uppercase tracking-widest text-xs animate-pulse">Code ontcijferen & Netwerk verifiëren...</p>
             </div>
           )}
           
@@ -139,7 +203,7 @@ export default function ScanPage() {
 
         {/* FOUTMELDING */}
         {errorMsg && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-400 w-full p-4 rounded-xl text-center text-sm font-bold mb-6 animate-in shake">
+          <div className="bg-red-500/10 border border-red-500/50 text-red-400 w-full p-4 rounded-xl text-center text-sm font-bold mb-6 animate-in shake shadow-lg">
             ❌ {errorMsg}
           </div>
         )}
@@ -167,8 +231,8 @@ export default function ScanPage() {
           </form>
         </div>
         
-        <p className="text-[10px] text-slate-500 font-medium mt-8 text-center max-w-xs">
-          Controleer altijd of de goederen fysiek in orde zijn voordat je de scan uitvoert. Na de scan is de betaling definitief.
+        <p className="text-[10px] text-slate-500 font-medium mt-8 text-center max-w-xs leading-relaxed">
+          Controleer altijd of de goederen fysiek in orde zijn voordat je de scan uitvoert. Na de scan is de betaling definitief en onomkeerbaar.
         </p>
 
       </div>
