@@ -23,7 +23,7 @@ export default function ScanPage() {
   const [isLoadingContext, setIsLoadingContext] = useState(true);
 
   // ==========================================
-  // 1. HAAL CONTEXT OP (Voorkomt blinde scans)
+  // 1. HAAL CONTEXT OP (Slimme 2.0 Check)
   // ==========================================
   useEffect(() => {
     async function fetchOrderContext() {
@@ -31,18 +31,24 @@ export default function ScanPage() {
       try {
         const { data, error } = await supabase
           .from("orders")
-          .select("batch_title, buyer_name, amount, escrow_status")
+          .select("batch_title, buyer_name, amount, escrow_status, trade_type, status")
           .eq("id", orderId)
           .single();
           
         if (error) throw error;
         setOrderDetails(data);
 
-        // Als de order al is vrijgegeven, direct naar succes scherm
-        if (data.escrow_status === "released") {
+        // Als de order al succesvol was afgerond
+        if (data.status === "completed") {
           setSuccess(true);
           setCameraActive(false);
         }
+        
+        // Als de koper een claim heeft ingediend of geannuleerd, blokkeer de camera
+        if (['disputed', 'cancelled', 'rejected'].includes(data.status)) {
+           setCameraActive(false);
+        }
+
       } catch (error) {
         console.error("Kon order niet vinden:", error);
         setErrorMsg("Ordergegevens konden niet worden geladen.");
@@ -57,8 +63,8 @@ export default function ScanPage() {
   // 2. SCAN & VERIFICATIE LOGICA
   // ==========================================
   const handleScan = async (detectedCode: string) => {
-    if (isProcessing || success) return;
-    setCameraActive(false); // Blokkeer de camera direct om dubbele calls te voorkomen
+    if (isProcessing || success || !cameraActive) return;
+    setCameraActive(false); // Blokkeer de camera direct om dubbele server-calls te voorkomen
     processRelease(detectedCode);
   };
 
@@ -88,7 +94,10 @@ export default function ScanPage() {
       setSuccess(true);
     } catch (err: any) {
       setErrorMsg(err.message);
-      setCameraActive(true); // Activeer vizier weer als de code fout was
+      // Alleen camera weer activeren als het geen fatale claim-blokkade is
+      if (!['disputed', 'cancelled', 'rejected'].includes(orderDetails?.status)) {
+        setCameraActive(true); 
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -107,7 +116,7 @@ export default function ScanPage() {
   }
 
   // ==========================================
-  // VIEW 2: SUCCES SCHERM (Geld is overgemaakt)
+  // VIEW 2: SUCCES SCHERM (Dynamisch voor Fiat/Natura)
   // ==========================================
   if (success) {
     return (
@@ -116,9 +125,11 @@ export default function ScanPage() {
           <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6 shadow-inner border border-emerald-100">
             ✅
           </div>
-          <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Geld Vrijgegeven!</h1>
+          <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Transactie Verzegeld!</h1>
           <p className="text-slate-600 font-medium mb-8 leading-relaxed">
-            De code is geverifieerd. 100% van het afgesproken bedrag is direct uit de Projekster Escrow naar je bankrekening overgemaakt. 
+            {orderDetails?.trade_type === 'fiat' 
+              ? "De code is geverifieerd. 100% van het afgesproken bedrag is direct uit de Projekster Escrow naar je bankrekening overgemaakt." 
+              : "De code is geverifieerd. Deze ruil in Natura is nu cryptografisch verzegeld en officieel afgerond."}
             <br/><br/>Je kunt de goederen nu met een gerust hart overhandigen.
           </p>
           <button 
@@ -133,7 +144,32 @@ export default function ScanPage() {
   }
 
   // ==========================================
-  // VIEW 3: SCANNER & VIZIER
+  // VIEW 3: BLOKKADE (Koper heeft geannuleerd/claim geopend)
+  // ==========================================
+  if (['disputed', 'cancelled', 'rejected'].includes(orderDetails?.status)) {
+    return (
+      <main className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border-2 border-red-500 rounded-3xl p-8 md:p-12 max-w-md w-full shadow-[0_20px_60px_-15px_rgba(239,68,68,0.3)] text-center animate-in zoom-in-95 duration-500">
+          <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6 shadow-inner border border-red-500/20">
+            🚨
+          </div>
+          <h1 className="text-3xl font-black text-white uppercase tracking-tight mb-2">Transactie Geblokkeerd</h1>
+          <p className="text-slate-400 font-medium mb-8 leading-relaxed">
+            De koper heeft deze transactie geannuleerd of een claim geopend. Scannen is niet meer mogelijk. Controleer het dashboard of de chat voor meer informatie.
+          </p>
+          <button 
+            onClick={() => router.push("/dashboard")} 
+            className="w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest py-4 rounded-xl shadow-md transition-all"
+          >
+            Terug naar Overzicht
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ==========================================
+  // VIEW 4: SCANNER & VIZIER
   // ==========================================
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -156,7 +192,12 @@ export default function ScanPage() {
           
           {orderDetails ? (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 inline-block text-left shadow-lg w-full max-w-sm">
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Je staat op het punt te leveren aan:</p>
+              <div className="flex justify-between items-start mb-1">
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Levering aan:</p>
+                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${orderDetails.trade_type === 'fiat' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  {orderDetails.trade_type === 'fiat' ? '💶 Fiat Betaling' : '🔄 Natura Ruil'}
+                </span>
+              </div>
               <p className="text-emerald-400 font-black mb-2 text-lg">{orderDetails.buyer_name}</p>
               <p className="text-sm font-medium text-slate-300">
                 Oogst: <strong className="text-white">{orderDetails.batch_title}</strong>
@@ -232,7 +273,7 @@ export default function ScanPage() {
         </div>
         
         <p className="text-[10px] text-slate-500 font-medium mt-8 text-center max-w-xs leading-relaxed">
-          Controleer altijd of de goederen fysiek in orde zijn voordat je de scan uitvoert. Na de scan is de betaling definitief en onomkeerbaar.
+          Controleer altijd of de goederen fysiek in orde zijn voordat je de scan uitvoert. Na de scan is de deal definitief en onomkeerbaar.
         </p>
 
       </div>
