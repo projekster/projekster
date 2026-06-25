@@ -48,7 +48,6 @@ export default function Navbar() {
       
       if (notifs) setNotifications(notifs);
 
-      // DE FIX: Maak een absoluut uniek kanaal om botsingen te voorkomen
       const uniqueChannelName = `notifs_${userId}_${Date.now()}`;
       activeChannel = supabase.channel(uniqueChannelName);
 
@@ -74,7 +73,6 @@ export default function Navbar() {
       }
     });
 
-    // DE FIX: Sloop de connectie meedogenloos af zodra de pagina herlaadt
     return () => { 
       subscription.unsubscribe();
       if (activeChannel) {
@@ -169,9 +167,12 @@ export default function Navbar() {
                 <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Welkom terug,</p>
                 <p className="text-sm font-black text-slate-900">{makerName || "Verifiëren..."}</p>
               </div>
+              
+              {/* DE KNOP: AANGEPAST NAAR MIJN HANDEL */}
               <Link href="/dashboard" className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 text-xs font-bold py-2.5 px-4 rounded-xl transition-all uppercase tracking-widest flex items-center gap-2 shadow-sm">
-                <span>🛡️</span> Mijn Kluis
+                <span>⚖️</span> Mijn Handel
               </Link>
+              
               <button onClick={handleLogout} className="bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-500 hover:text-red-600 text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm">
                 Sluit Af
               </button>
@@ -218,11 +219,12 @@ export default function Navbar() {
              </div>
           )}
           
-          {user && <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block text-sm font-bold text-amber-600 uppercase tracking-wide flex items-center gap-2"><span>🛡️</span> Naar Mijn Kluis</Link>}
+          {/* DE MOBIELE KNOP: AANGEPAST NAAR MIJN HANDEL */}
+          {user && <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block text-sm font-bold text-amber-600 uppercase tracking-wide flex items-center gap-2"><span>⚖️</span> Naar Mijn Handel</Link>}
           <Link href="/maak-batch" onClick={() => setIsMobileMenuOpen(false)} className="block text-sm font-bold text-slate-600 hover:text-slate-900 uppercase tracking-wide">+ Oogst Aanbieden</Link>
           
           {user ? (
-            <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="block w-full text-left text-sm font-bold text-red-500 pt-5 border-t border-slate-100 uppercase tracking-wide">Uitloggen (Sluit Kluis)</button>
+            <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="block w-full text-left text-sm font-bold text-red-500 pt-5 border-t border-slate-100 uppercase tracking-wide">Uitloggen (Verlaat Handelspost)</button>
           ) : (
             <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold py-3.5 rounded-xl mt-4 uppercase tracking-widest shadow-md">Inloggen / Registreren</Link>
           )}

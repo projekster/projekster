@@ -26,41 +26,31 @@ interface Batch {
   id: string; type: string; title: string; maker: string; category: string;
   reserved: number; total: number; days_left: number; price: string;
   image_url?: string; location?: string; unit?: string; lat?: number; lng?: number;
-  distance?: number; created_at?: string;
+  distance?: number; created_at?: string; allows_trade?: boolean; // TOEGEVOEGD VOOR DE NIEUWE UI
 }
 
 const VOEDSEL_FILTERS = ["Alle", "Vlees & Vis", "Zuivel & Eieren", "Groente & Fruit", "Graan & Meel", "Dranken & Conserven", "Honing & Zoet"];
 const GRONDSTOF_FILTERS = ["Alle", "Brandhout & Pellets", "Veevoer, Hooi & Stro", "Planten & Zaden", "Mest & Compost", "Levend Vee", "Werktuigen & Machines", "Off-Grid & Energie", "Bouwmateriaal"];
 
-// ==========================================
-// TOP 1% CONFIGURATIE: DE INFINITE GRID
-// ==========================================
 const ITEMS_PER_PAGE = 20;
 
 export default function Home() {
-  // --- Data & Flow State ---
   const [batches, setBatches] = useState<Batch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // --- Infinite Grid States ---
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
-  // --- Filter State ---
   const [activeVoedsel, setActiveVoedsel] = useState("Alle");
   const [activeGrondstof, setActiveGrondstof] = useState("Alle");
   const [searchLocation, setSearchLocation] = useState("");
   
-  // --- Geolocatie State ---
   const [isUsingGPS, setIsUsingGPS] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{lat: number, lng: number} | null>(null);
 
-  // ==========================================
-  // DE DATA MOTOR (TIJD & GPS GECOMBINEERD)
-  // ==========================================
   const loadMarketData = useCallback(async (isLoadMore = false, forceGpsCoords: {lat: number, lng: number} | null = null) => {
     const currentPage = isLoadMore ? page + 1 : 0;
     const currentGps = forceGpsCoords || gpsCoords;
@@ -74,7 +64,6 @@ export default function Home() {
       let data, error;
       
       if (isGpsActive && currentGps) {
-        // RADAR MODUS (Geolocatie Sortering met Offset/Limit)
         const res = await supabase.rpc('get_batches_with_distance', {
           user_lat: currentGps.lat,
           user_lng: currentGps.lng,
@@ -83,7 +72,6 @@ export default function Home() {
         });
         data = res.data; error = res.error;
       } else {
-        // STANDAARD MODUS (Tijd-gesorteerd via de Automated Reaper view)
         const res = await supabase
           .from("live_market")
           .select("*")
@@ -105,7 +93,7 @@ export default function Home() {
         setPage(currentPage);
       }
     } catch (err: any) {
-      console.error("Kritieke fout bij ophalen kluis:", err);
+      console.error("Kritieke fout bij ophalen handelspost:", err);
       setError("Verbinding met het netwerk verloren. Controleer je signaal.");
     } finally {
       setIsLoading(false);
@@ -115,12 +103,8 @@ export default function Home() {
 
   useEffect(() => {
     loadMarketData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, [loadMarketData]); 
 
-  // ==========================================
-  // DE GEOGRAFISCHE RADAR TRIGGER
-  // ==========================================
   const toggleGPS = () => {
     if (isUsingGPS) {
       setIsUsingGPS(false);
@@ -155,9 +139,6 @@ export default function Home() {
     );
   };
 
-  // ==========================================
-  // FILTER LOGICA (CLIENT SIDE)
-  // ==========================================
   const matchesLocation = (batch: Batch) => {
     if (!searchLocation.trim()) return true;
     return batch.location?.toLowerCase().includes(searchLocation.toLowerCase());
@@ -166,9 +147,6 @@ export default function Home() {
   const voedselBatches = batches.filter(batch => batch.type === "voedsel" && (activeVoedsel === "Alle" || batch.category === activeVoedsel) && matchesLocation(batch));
   const grondstofBatches = batches.filter(batch => batch.type === "grondstof" && (activeGrondstof === "Alle" || batch.category === activeGrondstof) && matchesLocation(batch));
 
-  // ==========================================
-  // PREMIUM SKELETON LOADER (White Cube Editie)
-  // ==========================================
   const SkeletonGrid = () => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
       {Array.from({ length: 5 }).map((_, i) => (
@@ -186,7 +164,7 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900">
       
-      {/* HERO SECTIE: Helder & Institutioneel */}
+      {/* HERO SECTIE */}
       <section className="relative flex flex-col items-center justify-center px-4 pt-24 pb-20 text-center border-b border-slate-200 bg-white overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-50 via-white to-white pointer-events-none"></div>
         <div className="relative z-10 max-w-4xl w-full space-y-8">
@@ -221,7 +199,7 @@ export default function Home() {
                 <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"></span> 
                 Live Netwerk Radar
               </h2>
-              <p className="text-xs text-slate-500 mt-2 uppercase tracking-widest font-bold">Geolocatie van actieve aanbieders en kluizen</p>
+              <p className="text-xs text-slate-500 mt-2 uppercase tracking-widest font-bold">Geolocatie van actieve aanbieders</p>
             </div>
           </div>
           <div className="rounded-3xl overflow-hidden shadow-sm border border-slate-200">
@@ -293,13 +271,29 @@ export default function Home() {
               {voedselBatches.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 min-h-[150px]">
                   {voedselBatches.map(batch => (
-                    <BatchCard key={batch.id} id={batch.id} title={batch.title} maker={batch.maker} reserved={batch.reserved} total={batch.total} category={batch.category} daysLeft={batch.days_left} image_url={batch.image_url} location={batch.location} unit={batch.unit} distance={batch.distance} created_at={batch.created_at} />
+                    <BatchCard 
+                      key={batch.id} 
+                      id={batch.id} 
+                      title={batch.title} 
+                      maker={batch.maker} 
+                      reserved={batch.reserved} 
+                      total={batch.total} 
+                      category={batch.category} 
+                      daysLeft={batch.days_left} 
+                      image_url={batch.image_url} 
+                      location={batch.location} 
+                      unit={batch.unit} 
+                      distance={batch.distance} 
+                      created_at={batch.created_at} 
+                      price={batch.price} 
+                      allows_trade={batch.allows_trade} 
+                    />
                   ))}
                 </div>
               ) : (
                 <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-16 text-center">
                   <span className="text-6xl mb-6 block grayscale opacity-30">🌾</span>
-                  <h3 className="text-slate-900 font-black uppercase tracking-widest text-xl mb-3">De kluis is nog in afwachting</h3>
+                  <h3 className="text-slate-900 font-black uppercase tracking-widest text-xl mb-3">De markt is nog in afwachting</h3>
                   <p className="text-slate-500 text-sm max-w-md mx-auto mb-8 font-medium">Het ecosysteem is klaar voor je eerste oogst. Wees de pionier in jouw regio en zet de eerste voedsel-batch op de radar.</p>
                   <Link href="/maak-batch" className="bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-xs py-4 px-8 rounded-xl transition-all shadow-md inline-block">
                     + Plaats Eerste Aanbod
@@ -326,7 +320,23 @@ export default function Home() {
               {grondstofBatches.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 min-h-[150px]">
                   {grondstofBatches.map(batch => (
-                    <BatchCard key={batch.id} id={batch.id} title={batch.title} maker={batch.maker} reserved={batch.reserved} total={batch.total} category={batch.category} daysLeft={batch.days_left} image_url={batch.image_url} location={batch.location} unit={batch.unit} distance={batch.distance} created_at={batch.created_at} />
+                    <BatchCard 
+                      key={batch.id} 
+                      id={batch.id} 
+                      title={batch.title} 
+                      maker={batch.maker} 
+                      reserved={batch.reserved} 
+                      total={batch.total} 
+                      category={batch.category} 
+                      daysLeft={batch.days_left} 
+                      image_url={batch.image_url} 
+                      location={batch.location} 
+                      unit={batch.unit} 
+                      distance={batch.distance} 
+                      created_at={batch.created_at} 
+                      price={batch.price} 
+                      allows_trade={batch.allows_trade} 
+                    />
                   ))}
                 </div>
               ) : (

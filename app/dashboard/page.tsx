@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../utils/supabase";
 import BatchCard from "../components/BatchCard";
-import QRCode from "react-qr-code"; // De nieuwe QR Motor
+import QRCode from "react-qr-code";
 
 // ==========================================
 // 1. DATAMODELLEN
@@ -19,6 +19,8 @@ interface Batch {
   reserved: number;
   total: number;
   days_left: number;
+  price?: string;
+  allows_trade?: boolean;
   image_url?: string;
   location?: string;
   unit?: string;
@@ -35,7 +37,7 @@ interface Order {
   trade_type: string;
   trade_offer?: string;
   status: 'pending' | 'accepted' | 'completed' | 'rejected';
-  escrow_status?: string; // 'none', 'held', 'released'
+  escrow_status?: string; 
   qr_release_code?: string;
   created_at: string;
 }
@@ -64,7 +66,7 @@ export default function Dashboard() {
   // Modals
   const [batchToDelete, setBatchToDelete] = useState<Batch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [qrOrder, setQrOrder] = useState<Order | null>(null); // Voor de Koper QR weergave
+  const [qrOrder, setQrOrder] = useState<Order | null>(null);
 
   // ==========================================
   // 2. DATA SYNCHRONISATIE & AUTH
@@ -100,6 +102,31 @@ export default function Dashboard() {
 
           const { data: ratingsData } = await supabase.from("trust_ratings").select("order_id").eq("reviewer_id", session.user.id);
           if (ratingsData) setRatedOrderIds(ratingsData.map(r => r.order_id));
+
+          // ----------------------------------------------------------------
+          // DE ONZICHTBARE VERIFICATIE CHECK (Als ze terugkomen van Stripe)
+          // ----------------------------------------------------------------
+          const searchParams = new URLSearchParams(window.location.search);
+          const activeStripeId = profileData?.stripe_account_id || "";
+          
+          if (searchParams.get("onboarding") === "success" && activeStripeId) {
+             fetch("/api/stripe/verify", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ accountId: activeStripeId, userId: session.user.id })
+             })
+             .then(res => res.json())
+             .then(verifyData => {
+               if (verifyData.success) {
+                 setStripeOnboarded(true); 
+                 router.replace('/dashboard'); 
+               } else {
+                 alert("Je hebt niet alle gegevens bij de bank ingevuld. De verificatie is afgebroken.");
+                 router.replace('/dashboard');
+               }
+             })
+             .catch(err => console.error("Verificatie fout:", err));
+          }
         }
       } catch (error) { 
         console.error("Fout bij synchronisatie:", error); 
@@ -111,7 +138,7 @@ export default function Dashboard() {
   }, [router]);
 
   // ==========================================
-  // 3. STRIPE ONBOARDING MOTOR
+  // 3. STRIPE ONBOARDING MOTOR (MET TITANIUM FOUTAFHANDELING)
   // ==========================================
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);
@@ -120,22 +147,40 @@ export default function Dashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: currentUserId,
           email: currentUserEmail,
           stripeAccountId: stripeAccountId,
           returnUrl: window.location.origin,
         }),
       });
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url; // Stuur boer naar de officiële Stripe Bank omgeving
-      } else {
-        throw new Error("Geen URL ontvangen van Stripe");
+      
+      // Top 1% Hack: Voorkom vastlopers door EERST te checken of we überhaupt JSON terugkrijgen
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error("Ruwe Server Error:", text);
+        throw new Error("De server gaf een fatale fout terug. Check of je Stripe API keys in Vercel staan.");
       }
-    } catch (error) {
-      console.error("Stripe error:", error);
-      alert("Er ging iets mis met het opzetten van de bankverbinding. Probeer het later opnieuw.");
-      setIsConnectingStripe(false);
+      
+      if (!response.ok) {
+        throw new Error(data.error || `Server foutcode: ${response.status}`);
+      }
+
+      if (data.url) {
+        // Sla het ID op zodat we de boer niet kwijtraken als hij de bank app wegklikt
+        if (data.accountId && !stripeAccountId) {
+          await supabase.from("profiles").update({ stripe_account_id: data.accountId }).eq("id", currentUserId);
+        }
+        window.location.href = data.url; 
+      } else {
+        throw new Error("Geen geldige URL ontvangen van Stripe.");
+      }
+    } catch (error: any) {
+      console.error("Stripe Dashboard Error:", error);
+      alert(`Connectiefout: ${error.message}`);
+    } finally {
+      setIsConnectingStripe(false); // Zorgt ervoor dat de knop weer klikbaar wordt
     }
   };
 
@@ -337,12 +382,11 @@ export default function Dashboard() {
                          {order.trade_type === 'fiat' && order.status !== 'completed' && order.escrow_status !== 'released' && (
                            <div className="flex gap-2">
                               <button onClick={() => handleOpenChat(order.id)} className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">💬 Chat</button>
-                              {/* SCAN QR KNOP -> Verwijst later naar de scanner page */}
                               <button onClick={() => router.push(`/scan/${order.id}`)} className="w-2/3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md transition-colors flex justify-center items-center gap-2"><span>📷</span> Scan Afhaal-QR</button>
                            </div>
                          )}
 
-                         {/* ERECODE MATRIX (Voor alles wat afgerond is) */}
+                         {/* ERECODE MATRIX */}
                          {order.status === "completed" && !ratedOrderIds.includes(order.id) && (
                            <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 text-center animate-in zoom-in-95 mt-2">
                              <p className="text-xs text-slate-500 font-bold mb-3 uppercase tracking-widest">Erecode: Beoordeel de Koper</p>
@@ -369,36 +413,37 @@ export default function Dashboard() {
               </div>
               {myBatches.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
-  {myBatches.map((batch) => (
-    <div key={batch.id} className="relative group h-full">
-      <BatchCard 
-        id={batch.id} 
-        title={batch.title} 
-        maker={batch.maker} 
-        reserved={batch.reserved} 
-        total={batch.total} 
-        category={batch.category} 
-        daysLeft={batch.days_left} /* HIER ZIT DE FIX: we vertalen days_left naar daysLeft */
-        image_url={batch.image_url} 
-        location={batch.location} 
-        unit={batch.unit} 
-        created_at={batch.created_at} 
-      />
-      
-      {/* HOVER OVERLAY & VAULT LOCK (WHITE CUBE) */}
-      <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
-        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
-        {batch.reserved > 0 ? (
-          <div className="w-full text-center group/lock relative">
-            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
-          </div>
-        ) : (
-          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
-        )}
-      </div>
-    </div>
-  ))}
-</div>
+                  {myBatches.map((batch) => (
+                    <div key={batch.id} className="relative group h-full">
+                      <BatchCard 
+                        id={batch.id} 
+                        title={batch.title} 
+                        maker={batch.maker} 
+                        reserved={batch.reserved} 
+                        total={batch.total} 
+                        category={batch.category} 
+                        daysLeft={batch.days_left}
+                        price={batch.price}
+                        allows_trade={batch.allows_trade}
+                        image_url={batch.image_url} 
+                        location={batch.location} 
+                        unit={batch.unit} 
+                        created_at={batch.created_at} 
+                      />
+                      
+                      <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
+                        <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
+                        {batch.reserved > 0 ? (
+                          <div className="w-full text-center group/lock relative">
+                            <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="w-full bg-slate-50 border border-dashed border-slate-300 rounded-3xl p-12 text-center shadow-sm">
                   <h3 className="text-slate-900 font-bold mb-2 text-base uppercase tracking-wide">De schappen zijn leeg</h3>

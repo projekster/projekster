@@ -7,7 +7,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 // ==========================================
-// DE CLIENT-SIDE APPLICATIE (UI & Logica)
+// DE CLIENT-SIDE APPLICATIE (UI & Kassa Logica)
 // ==========================================
 export default function BatchDetailClient({ id }: { id: string }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
     fetchBatch();
   }, [id]);
 
-  // --- TRANSACTIE LOGICA ---
+  // --- TRANSACTIE BEVEILIGING ---
   const checkAuthAndProceed = async (mode: "reserve" | "trade") => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -68,6 +68,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
     if (mode === "trade") setTradeMode(true);
   };
 
+  // --- DE STRIPE KASSA (FIAT) ---
   const handleReserve = async () => {
     if (reserveAmount <= 0 || reserveAmount > (batch.total - batch.reserved)) return;
     
@@ -95,16 +96,17 @@ export default function BatchDetailClient({ id }: { id: string }) {
         // Lanceer de Stripe iDEAL Betaalomgeving
         window.location.href = data.url; 
       } else {
-        throw new Error(data.error || "Fout bij opzetten kluis.");
+        throw new Error(data.error || "Fout bij opzetten beveiligde betaling.");
       }
 
     } catch (error: any) {
       console.error("Betaalfout:", error);
-      alert("De bankkluis kon niet geopend worden. Probeer het opnieuw.");
-      setIsProcessing(false); // We zetten hem alleen op false als het misgaat (anders laadt hij door tot redirect)
+      alert(error.message || "De betaalomgeving kon niet worden geladen. Probeer het opnieuw.");
+      setIsProcessing(false); // Zet knop weer vrij als het mislukt
     } 
   };
 
+  // --- NATURA RUILVOORSTEL ---
   const handleTrade = async () => {
     if (!tradeOffer.trim()) return;
     
@@ -120,7 +122,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
         buyer_name: buyerName,
         seller_name: batch.maker,
         batch_title: batch.title,
-        amount: 1, // Standaard ruil eenheid (nooit meer de hele batch)
+        amount: 1, // Standaard ruil eenheid (nooit meer de hele batch tegelijk)
         trade_type: "trade",
         trade_offer: tradeOffer,
         status: "pending" // Gaat de Inbox-flow in als voorstel
@@ -130,6 +132,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
       setActionSuccess("trade");
     } catch (error) {
       console.error("Fout bij ruilvoorstel:", error);
+      alert("Er ging iets mis bij het versturen van je ruilvoorstel.");
     } finally {
       setIsProcessing(false);
     }
@@ -161,9 +164,9 @@ export default function BatchDetailClient({ id }: { id: string }) {
         <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100 shadow-sm">
           <span className="text-4xl">⚠️</span>
         </div>
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-widest mb-4">Batch Niet Gevonden of Geblokkeerd</h1>
-        <p className="text-slate-500 max-w-md mb-8">Deze oogst of grondstof bestaat niet meer of is verwijderd uit de kluis.</p>
-        <Link href="/" className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-md">
+        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-widest mb-4">Aanbod Niet Gevonden</h1>
+        <p className="text-slate-500 max-w-md mb-8">Deze oogst of grondstof bestaat niet meer of is verwijderd van de markt.</p>
+        <Link href="/#aanbod" className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-md">
           Terug naar de markt
         </Link>
       </main>
@@ -173,6 +176,12 @@ export default function BatchDetailClient({ id }: { id: string }) {
   const remaining = batch.total - batch.reserved;
   const percentage = Math.min((batch.reserved / batch.total) * 100, 100);
 
+  // Wiskunde voor live weergave 5% Escrow fee
+  const rawPrice = parseFloat(batch.price?.toString().replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
+  const subTotal = rawPrice * reserveAmount;
+  const platformFee = subTotal * 0.05;
+  const totalFiat = subTotal + platformFee;
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 pt-8">
       <div className="max-w-[1200px] mx-auto px-4 md:px-6">
@@ -180,7 +189,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
         {/* BROODKRUIMEL / TERUG */}
         <div className="mb-8">
           <Link href="/#aanbod" className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500 hover:text-amber-600 transition-colors">
-            <span>&larr;</span> Terug naar Actueel Aanbod
+            <span>&larr;</span> Terug naar de Markt
           </Link>
         </div>
 
@@ -266,14 +275,14 @@ export default function BatchDetailClient({ id }: { id: string }) {
                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                       <span className="text-amber-500">🛡️</span> Veiligheid
                     </h3>
-                    <p className="text-sm text-slate-600 flex-grow">Je reserveert direct bij de bron. Wij faciliteren de connectie en de administratie.</p>
+                    <p className="text-sm text-slate-600 flex-grow">Je reserveert direct bij de bron. Wij faciliteren de betaling via beveiligde Escrow.</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* KOLOM RECHTS: DE CONVERSIE KLUIS */}
+          {/* KOLOM RECHTS: DE CONVERSIE KASSA */}
           <div className="lg:col-span-5 relative">
             <div className="sticky top-28 bg-white border border-slate-200 rounded-3xl p-8 shadow-xl flex flex-col gap-8">
               
@@ -313,7 +322,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
               {/* PRIJS */}
               <div className="py-6 border-y border-slate-100 flex flex-col justify-center items-center text-center bg-slate-50 rounded-2xl">
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2">Gevraagde Waarde (Fiat)</p>
-                <p className="text-5xl font-black text-slate-900 tracking-tighter">{batch.price}</p>
+                <p className="text-5xl font-black text-slate-900 tracking-tighter">€{rawPrice.toFixed(2).replace('.', ',')}</p>
                 
                 {batch.allows_trade && (
                   <div className="mt-4 inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-sm font-bold shadow-sm">
@@ -324,13 +333,8 @@ export default function BatchDetailClient({ id }: { id: string }) {
 
               {/* ACTIES & FORMULIEREN */}
               <div className="space-y-4">
-                {actionSuccess === "reserve" ? (
-                  <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-2xl text-center animate-in fade-in slide-in-from-bottom-2 shadow-sm">
-                    <span className="text-4xl mb-3 block">✅</span>
-                    <h3 className="font-bold text-emerald-800 mb-1">Reservering Geplaatst</h3>
-                    <p className="text-xs text-emerald-600 font-medium">Jouw claim is vastgelegd. Neem contact op met de maker of wacht op hun bericht.</p>
-                  </div>
-                ) : actionSuccess === "trade" ? (
+                {/* SUCCES MELDINGEN */}
+                {actionSuccess === "trade" ? (
                   <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center animate-in fade-in slide-in-from-bottom-2 shadow-sm">
                     <span className="text-4xl mb-3 block">🤝</span>
                     <h3 className="font-bold text-amber-800 mb-1">Voorstel Verzonden</h3>
@@ -359,10 +363,12 @@ export default function BatchDetailClient({ id }: { id: string }) {
                     )}
                   </>
                 ) : reserveMode ? (
+                  
+                  // DE FIAT KASSA UI
                   <div className="bg-white p-6 rounded-2xl border-2 border-amber-200 space-y-5 animate-in fade-in slide-in-from-bottom-4 shadow-lg">
                     <div>
                       <h3 className="font-black text-slate-900 uppercase tracking-wide text-lg mb-1">Selecteer Aantal</h3>
-                      <p className="text-xs text-amber-600 font-medium">Hoeveel {batch.unit || "eenheden"} wil je claimen?</p>
+                      <p className="text-xs text-amber-600 font-medium">Hoeveel {batch.unit || "eenheden"} wil je afnemen?</p>
                     </div>
                     
                     <input 
@@ -374,6 +380,22 @@ export default function BatchDetailClient({ id }: { id: string }) {
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-slate-900 text-2xl font-black text-center focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all shadow-inner"
                     />
                     
+                    {/* DE LIVE WISKUNDE (Top 1% Transparantie) */}
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm space-y-2 text-slate-600">
+                       <div className="flex justify-between">
+                         <span>Goederen ({reserveAmount}x):</span> 
+                         <span className="font-bold text-slate-900">€{subTotal.toFixed(2).replace('.', ',')}</span>
+                       </div>
+                       <div className="flex justify-between text-xs">
+                         <span>Projekster Escrow (5%):</span> 
+                         <span>€{platformFee.toFixed(2).replace('.', ',')}</span>
+                       </div>
+                       <div className="flex justify-between pt-2 border-t border-slate-200 font-black text-slate-900">
+                         <span>Totaal Afrekenen:</span> 
+                         <span>€{totalFiat.toFixed(2).replace('.', ',')}</span>
+                       </div>
+                    </div>
+
                     <div className="flex gap-3 pt-2">
                       <button 
                         onClick={() => setReserveMode(false)}
@@ -386,11 +408,14 @@ export default function BatchDetailClient({ id }: { id: string }) {
                         onClick={handleReserve}
                         className="w-2/3 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-300 text-white font-bold uppercase tracking-wider py-3.5 rounded-xl transition-all shadow-md text-sm flex justify-center items-center gap-2"
                       >
-                        {isProcessing ? "Verwerken..." : "Bevestig Claim"}
+                        {isProcessing ? "Verwerken..." : "Betaal Veilig"}
                       </button>
                     </div>
                   </div>
+
                 ) : (
+                  
+                  // DE NATURA RUIL UI
                   <div className="bg-white p-6 rounded-2xl border-2 border-amber-200 space-y-4 animate-in fade-in slide-in-from-bottom-4 shadow-lg">
                     <div>
                       <h3 className="font-black text-slate-900 uppercase tracking-wide text-lg mb-1">Jouw Voorstel</h3>
@@ -425,7 +450,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
               </div>
 
               <p className="text-xs text-slate-400 text-center font-medium mt-2 flex items-center justify-center gap-2">
-                <span>🔒</span> Veilige communicatie via de Projekster kluis.
+                <span>🔒</span> Veilige transacties via Stripe Escrow. Geld wordt vrijgegeven na QR-scan.
               </p>
 
             </div>

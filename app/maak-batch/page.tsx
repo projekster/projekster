@@ -71,7 +71,7 @@ export default function MaakBatch() {
   }, [router]);
 
   // ==========================================
-  // LOGICA: LIVE COÖRDINATEN ZOEKEN (NOMINATIM API)
+  // LOGICA: LIVE COÖRDINATEN ZOEKEN 
   // ==========================================
   const verifyLocation = async () => {
     if (!location.trim()) return;
@@ -80,14 +80,15 @@ export default function MaakBatch() {
     setLocationResolved(null);
     
     try {
-      // Roep de open-source geografische vertaler aan
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`, {
+        headers: { 'User-Agent': 'Projekster_Network/1.0' } // Voorkomt blokkades door de API provider
+      });
       const data = await res.json();
       
       if (data && data.length > 0) {
         setLat(parseFloat(data[0].lat));
         setLng(parseFloat(data[0].lon));
-        setLocationResolved(data[0].display_name); // Toon de exact gevonden naam
+        setLocationResolved(data[0].display_name); 
       } else {
         setLocationResolved("Geen exacte coördinaten gevonden. Radar weergave mogelijk beperkt.");
         setLat(null);
@@ -102,11 +103,19 @@ export default function MaakBatch() {
   };
 
   // ==========================================
-  // LOGICA: FOTO PREVIEW
+  // LOGICA: FOTO PREVIEW & BEVEILIGING
   // ==========================================
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setErrorMsg("");
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      // TOP 1% BEVEILIGING: Limiteer bestandsgrootte op 5MB om vastlopers te voorkomen
+      if (file.size > 5 * 1024 * 1024) {
+        setErrorMsg("Deze foto is te groot. Selecteer een afbeelding van maximaal 5MB.");
+        return;
+      }
+      
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
@@ -125,12 +134,13 @@ export default function MaakBatch() {
         throw new Error("Vul alle verplichte velden in, inclusief de ophaallocatie.");
       }
 
-      // Als de locatie nog niet vertaald is (bijv. als de gebruiker heel snel op opslaan klikt),
-      // forceren we nog één keer een snelle zoekopdracht. Hier laten we NOOIT logica vallen.
+      // Geografie Fallback Check
       let finalLat = lat;
       let finalLng = lng;
       if (!finalLat || !finalLng) {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`, {
+          headers: { 'User-Agent': 'Projekster_Network/1.0' }
+        });
         const data = await res.json();
         if (data && data.length > 0) {
           finalLat = parseFloat(data[0].lat);
@@ -163,8 +173,8 @@ export default function MaakBatch() {
         total: parseInt(total),
         unit,
         location,
-        lat: finalLat, // De wiskundige X
-        lng: finalLng, // De wiskundige Y
+        lat: finalLat, 
+        lng: finalLng, 
         days_left: parseInt(daysLeft),
         price,
         description,
@@ -182,14 +192,14 @@ export default function MaakBatch() {
       
     } catch (error: any) {
       console.error("Supabase Error:", error);
-      setErrorMsg(error.message || "Er is een fout opgetreden bij het opslaan in de kluis.");
+      setErrorMsg(error.message || "Er is een fout opgetreden bij het publiceren op de markt.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // ==========================================
-  // LAADSCHERMEN & SUCCES UX (WHITE CUBE)
+  // LAADSCHERMEN & SUCCES UX 
   // ==========================================
   if (isAuthChecking) {
     return (
@@ -203,14 +213,14 @@ export default function MaakBatch() {
   if (isSuccess) {
     return (
       <main className="min-h-[80vh] bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-10 text-center shadow-xl relative overflow-hidden">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-10 text-center shadow-xl relative overflow-hidden animate-in zoom-in-95 duration-500">
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
           <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-100 shadow-inner">
             <span className="text-5xl">✨</span>
           </div>
           <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-3">Oogst Geregistreerd</h2>
           <p className="text-slate-500 text-sm mb-8 leading-relaxed font-medium">
-            Jouw batch ligt veilig in de kluis en is zojuist gekoppeld aan de geografische radar van Projekster.
+            Jouw batch is succesvol vastgelegd en direct gekoppeld aan de geografische radar van het netwerk.
           </p>
           <div className="space-y-3">
             <button onClick={() => router.push('/')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest py-4 rounded-xl transition-all shadow-md">
@@ -239,7 +249,7 @@ export default function MaakBatch() {
         </div>
 
         {errorMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 text-red-600 border border-red-200 font-medium text-sm flex items-center gap-3 shadow-sm">
+          <div className="mb-6 p-4 rounded-xl bg-red-50 text-red-600 border border-red-200 font-medium text-sm flex items-center gap-3 shadow-sm animate-in shake">
             <span>⚠️</span> {errorMsg}
           </div>
         )}
@@ -255,7 +265,7 @@ export default function MaakBatch() {
             <div className="space-y-3">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
                 Visueel Bewijs 
-                <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px]">Aanbevolen</span>
+                <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px]">Max 5MB</span>
               </label>
               <div className="w-full relative">
                 {imagePreview ? (
@@ -381,9 +391,15 @@ export default function MaakBatch() {
                 </select>
               </div>
 
-              <div className="md:col-span-6 space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fiat Waarde (Prijs) *</label>
-                <input type="text" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Bijv. € 5,- p/stuk" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner" />
+              <div className="md:col-span-6 space-y-3 relative">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fiat Waarde *</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">€</span>
+                  <input type="text" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="5,00 p/stuk" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 pl-8 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner" />
+                </div>
+                <p className="text-[10px] text-slate-500 font-bold tracking-wider pt-1">
+                  Jij ontvangt 100%. De koper betaalt een kleine fee.
+                </p>
               </div>
 
               <div className="md:col-span-6 space-y-3">
@@ -401,7 +417,7 @@ export default function MaakBatch() {
               <div className="flex items-center justify-between cursor-pointer group" onClick={() => setAllowsTrade(!allowsTrade)}>
                 <div>
                   <h3 className="text-lg font-black text-slate-900 group-hover:text-amber-600 transition-colors">Ruilen in Natura toestaan?</h3>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Accepteer goederen in plaats van fiat-geld.</p>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Accepteer fysieke goederen in plaats van fiat-geld.</p>
                 </div>
                 <div className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 shadow-inner border ${allowsTrade ? "bg-amber-500 border-amber-600" : "bg-slate-200 border-slate-300"}`}>
                   <div className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${allowsTrade ? "translate-x-6" : ""}`}></div>
@@ -417,11 +433,11 @@ export default function MaakBatch() {
           </div>
 
           {/* SUBMIT */}
-          <div className="pt-4">
-            <button disabled={isSubmitting} className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black uppercase tracking-widest text-lg py-5 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1 flex justify-center items-center">
+          <div className="pt-4 pb-12">
+            <button disabled={isSubmitting || (!lat || !lng && locationResolved !== null)} className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black uppercase tracking-widest text-lg py-5 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1 flex justify-center items-center">
               {isSubmitting ? (
                 <span className="flex items-center gap-3"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Verwerken...</span>
-              ) : "Activeer Batch op de Marktplaats"}
+              ) : "Activeer Oogst op de Radar"}
             </button>
           </div>
 

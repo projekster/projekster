@@ -54,7 +54,7 @@ export default function ChatRoom() {
       if (profile) setCurrentUserName(profile.display_name);
 
       try {
-        // Haal Order op (Inclusief Status)
+        // Haal Order op (Inclusief Status en Escrow)
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
           .select("*")
@@ -63,7 +63,7 @@ export default function ChatRoom() {
 
         if (orderError) throw orderError;
         
-        // Zorg dat oude orders zonder status standaard op 'voltooid' of 'pending' worden gezet voor weergave
+        // Zorg dat oude orders zonder status correct worden getoond
         if (!orderData.status) {
            orderData.status = orderData.trade_type === 'fiat' ? 'completed' : 'pending';
         }
@@ -78,7 +78,7 @@ export default function ChatRoom() {
 
         if (messagesData) setMessages(messagesData);
 
-        // Live Websocket
+        // Live Websocket voor real-time berichten
         const uniqueChannelName = `room_${id}_${Date.now()}`;
         activeChannel = supabase.channel(uniqueChannelName);
         
@@ -91,6 +91,7 @@ export default function ChatRoom() {
               setMessages((prev) => {
                 const alreadyExists = prev.some(m => m.id === incoming.id);
                 if (alreadyExists) return prev;
+                // Verwijder het tijdelijke 'optimistic' bericht om dubbele weergave te voorkomen
                 const filtered = prev.filter(m => !(m.id.startsWith('temp_') && m.text === incoming.text));
                 return [...filtered, incoming];
               });
@@ -99,7 +100,7 @@ export default function ChatRoom() {
           .subscribe();
 
       } catch (error) {
-        console.error("Fout bij laden van chatroom:", error);
+        console.error("Fout bij laden van communicatiekanaal:", error);
       } finally {
         setIsLoading(false);
       }
@@ -159,9 +160,9 @@ export default function ChatRoom() {
   };
 
   // ==========================================
-  // HANDELS-LOGICA: ACCEPTEER / WIJS AF
+  // HANDELS-LOGICA: ACCEPTEER / WIJS AF (NATURA)
   // ==========================================
-  const handleTradeAction = async (action: 'completed' | 'rejected') => {
+  const handleTradeAction = async (action: 'accepted' | 'rejected') => {
     setIsUpdatingStatus(true);
     try {
       // 1. Update de order status in de database
@@ -172,9 +173,8 @@ export default function ChatRoom() {
       
       if (orderError) throw orderError;
 
-      // 2. Als geaccepteerd: Voorraad afschrijven!
-      if (action === 'completed') {
-        // Haal actuele batch op om wiskunde correct uit te voeren
+      // 2. Als geaccepteerd: Voorraad reserveren (nog niet definitief afgehandeld!)
+      if (action === 'accepted') {
         const { data: batch } = await supabase.from('batches').select('reserved').eq('id', order.batch_id).single();
         if (batch) {
           const newReserved = batch.reserved + (order.amount || 1);
@@ -183,9 +183,9 @@ export default function ChatRoom() {
       }
 
       // 3. Stuur een onzichtbaar Systeem-bericht in de chat
-      const systemText = action === 'completed' 
-        ? "✅ De maker heeft dit ruilvoorstel officieel geaccepteerd. De voorraad is bijgewerkt."
-        : "❌ De maker heeft dit ruilvoorstel afgewezen.";
+      const systemText = action === 'accepted' 
+        ? "✅ De maker heeft dit ruilvoorstel geaccepteerd! De eenheden zijn gereserveerd. Spreek hier een tijd en locatie af voor de fysieke ruil."
+        : "❌ De maker heeft dit ruilvoorstel afgewezen. Dit kanaal wordt gesloten.";
 
       await supabase.from("messages").insert([{
         order_id: order.id,
@@ -236,22 +236,22 @@ export default function ChatRoom() {
             <div>
               <h2 className="font-black text-slate-900 uppercase tracking-tight text-sm md:text-base">{partnerName}</h2>
               <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                <span className="w-1.5 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Geverifieerd Kanaal
+                <span className="w-1.5 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Kanaal Beveiligd
               </p>
             </div>
           </div>
           <Link href="/dashboard" className="text-xs text-slate-500 hover:text-slate-900 uppercase tracking-wider font-bold bg-white border border-slate-200 px-4 py-2 rounded-lg transition-colors shadow-sm">
-            Sluit Chat
+            Mijn Handel
           </Link>
         </div>
 
         <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-5 scrollbar-none">
           {messages.map((msg) => {
-            // SYSTEEM BERICHTEN (Voor updates over de deal)
+            // SYSTEEM BERICHTEN (Voor automatische updates in de chat)
             if (msg.sender_name === "Systeem") {
               return (
-                <div key={msg.id} className="w-full flex justify-center my-4">
-                  <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm text-center">
+                <div key={msg.id} className="w-full flex justify-center my-6">
+                  <span className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 rounded-xl shadow-sm text-center max-w-sm">
                     {msg.text}
                   </span>
                 </div>
@@ -282,17 +282,21 @@ export default function ChatRoom() {
           <div ref={messagesEndRef} className="h-2" />
         </div>
 
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 bg-white flex gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+        <form onSubmit={handleSendMessage} className="p-4 md:p-6 border-t border-slate-200 bg-white flex gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
           <input 
             type="text"
             value={newMessage}
-            disabled={currentStatus === 'rejected'}
+            disabled={currentStatus === 'rejected' || currentStatus === 'completed'}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder={currentStatus === 'rejected' ? "Kanaal gesloten." : `Stuur een bericht naar ${partnerName}...`}
+            placeholder={
+              currentStatus === 'rejected' ? "Kanaal is gesloten." : 
+              currentStatus === 'completed' ? "Transactie is fysiek afgerond. Kanaal gesloten." : 
+              `Stuur een bericht naar ${partnerName}...`
+            }
             className="flex-grow bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-inner disabled:bg-slate-100 disabled:cursor-not-allowed"
           />
           <button 
-            disabled={!newMessage.trim() || currentStatus === 'rejected'}
+            disabled={!newMessage.trim() || currentStatus === 'rejected' || currentStatus === 'completed'}
             className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-black uppercase tracking-widest text-xs px-6 md:px-8 rounded-xl transition-colors shadow-md flex items-center justify-center"
           >
             Verstuur
@@ -311,13 +315,25 @@ export default function ChatRoom() {
             <div className="flex justify-between items-start mb-2">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Informatie & Context</h3>
               
-              {/* STATUS INDICATOR BADGE */}
-              {currentStatus === 'completed' ? (
-                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">✅ Akkoord</span>
-              ) : currentStatus === 'rejected' ? (
-                <span className="bg-red-50 text-red-700 border border-red-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">❌ Afgewezen</span>
+              {/* SLIMME STATUS INDICATOR BADGE (Snapt zowel Natura als Fiat Escrow) */}
+              {order.trade_type === 'fiat' ? (
+                order.escrow_status === 'held' ? (
+                  <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm flex items-center gap-1"><span>🔒</span> In de Kluis</span>
+                ) : order.escrow_status === 'released' ? (
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">✅ Geld Overgemaakt</span>
+                ) : (
+                  <span className="bg-slate-100 text-slate-500 border border-slate-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">Betaald</span>
+                )
               ) : (
-                <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm animate-pulse">⏳ Onderhandeling</span>
+                currentStatus === 'completed' ? (
+                  <span className="bg-slate-100 text-slate-500 border border-slate-300 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">✅ Overhandigd</span>
+                ) : currentStatus === 'accepted' ? (
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">🤝 Akkoord</span>
+                ) : currentStatus === 'rejected' ? (
+                  <span className="bg-red-50 text-red-700 border border-red-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm">❌ Afgewezen</span>
+                ) : (
+                  <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm animate-pulse">⏳ Voorstel in beraad</span>
+                )
               )}
             </div>
             <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">{order.batch_title}</h4>
@@ -329,15 +345,22 @@ export default function ChatRoom() {
               <span className={`inline-block text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-sm ${
                 order.trade_type === "fiat" ? "bg-slate-900 text-white border border-slate-800" : "bg-white text-slate-900 border border-slate-300"
               }`}>
-                {order.trade_type === "fiat" ? "💶 Fiat Gereserveerd" : "🔄 Natura Ruilvoorstel"}
+                {order.trade_type === "fiat" ? "💶 Fiat Betaling" : "🔄 Natura Ruilvoorstel"}
               </span>
             </div>
 
             <div className="pt-4 border-t border-slate-200">
               {order.trade_type === "fiat" ? (
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gereserveerd Volume</p>
-                  <p className="text-xl font-black text-slate-900">{order.amount || 1} <span className="text-sm text-slate-500 font-bold uppercase tracking-wider">eenheden</span></p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gereserveerd Volume</p>
+                    <p className="text-xl font-black text-slate-900">{order.amount || 1} <span className="text-sm text-slate-500 font-bold uppercase tracking-wider">eenheden</span></p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-xs text-blue-800 font-medium leading-relaxed">
+                    De betaling voor deze order zit veilig in de Stripe Escrow kluis. De koper heeft een QR-code ontvangen. 
+                    <br/><br/>
+                    <strong>Voor de maker:</strong> Scan deze code bij overdracht via je 'Mijn Handel' overzicht om het geld direct vrij te geven.
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -355,12 +378,13 @@ export default function ChatRoom() {
           </div>
           
           {/* HET COMMAND CENTER (Alleen voor de Maker bij een open ruilverzoek) */}
+          {/* TOP 1% FIX: 'accepted' is de nieuwe status voor goedkeuring, NIET 'completed' */}
           {isSeller && order.trade_type === 'trade' && currentStatus === 'pending' && (
             <div className="pt-6 border-t border-slate-200 space-y-3 animate-in fade-in slide-in-from-bottom-4">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2 text-center">Jouw Beslissing</h3>
               <button 
                 disabled={isUpdatingStatus}
-                onClick={() => handleTradeAction('completed')}
+                onClick={() => handleTradeAction('accepted')} 
                 className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2"
               >
                 {isUpdatingStatus ? "Verwerken..." : "✅ Accepteer Ruilakkoord"}
@@ -373,16 +397,29 @@ export default function ChatRoom() {
                 Wijs Af
               </button>
               <p className="text-[9px] text-slate-400 text-center font-medium leading-relaxed pt-2">
-                Bij acceptatie wordt de voorraad ({order.amount || 1} eenheden) direct en definitief gereserveerd voor deze koper.
+                Bij acceptatie wordt de voorraad direct gereserveerd. Zodra de spullen fysiek zijn geruild, markeer je de order in je dashboard als 'Overhandigd'.
               </p>
             </div>
           )}
 
+          {/* MELDING ALS DE NATURA RUIL GEACCEPTEERD IS (Voor beide partijen zichtbaar) */}
+          {order.trade_type === 'trade' && currentStatus === 'accepted' && (
+             <div className="pt-6 border-t border-slate-200 space-y-3 animate-in fade-in slide-in-from-bottom-4 text-center">
+               <span className="text-3xl block mb-2">🤝</span>
+               <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest">Ruil is Geaccepteerd</h3>
+               <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                 Spreek hier een tijdstip af om fysiek af te spreken. 
+                 <br/><br/>
+                 <strong className="text-slate-700">Let op (Voor de Maker):</strong> Ga naar <i>Mijn Handel</i> en klik op 'Markeer als Overhandigd' zodra de goederen fysiek zijn uitgewisseld.
+               </p>
+             </div>
+          )}
+
         </div>
 
-        <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-center mt-6">
-          <p className="text-[10px] text-blue-800 font-medium leading-relaxed">
-            🔒 Dit kanaal is end-to-end beveiligd. Handel altijd volgens de erecode. Zodra een deal rond is, kun je hier de overdracht afstemmen.
+        <div className="p-5 bg-slate-100 border border-slate-200 rounded-2xl text-center mt-6">
+          <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+            🛡️ Dit kanaal wordt beveiligd door het Projekster netwerk. Handel altijd volgens de lokale erecode.
           </p>
         </div>
       </div>

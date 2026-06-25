@@ -102,7 +102,7 @@ export default function RootLayout({
               <div>
                 <h4 className="text-slate-900 font-bold uppercase tracking-wider text-xs mb-4">Netwerk</h4>
                 <ul className="space-y-3 text-sm font-medium">
-                  <li><Link href="/dashboard" className="text-slate-500 hover:text-amber-600 transition-colors">Mijn Kluis</Link></li>
+                  <li><Link href="/dashboard" className="text-slate-500 hover:text-amber-600 transition-colors">Mijn Handel</Link></li>
                   <li><Link href="#" className="text-slate-500 hover:text-amber-600 transition-colors">Verificatieproces</Link></li>
                   <li><Link href="#" className="text-slate-500 hover:text-amber-600 transition-colors">Ons Manifest</Link></li>
                 </ul>
