@@ -54,7 +54,6 @@ export default function ChatRoom() {
       if (profile) setCurrentUserName(profile.display_name);
 
       try {
-        // Haal Order op
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
           .select("*")
@@ -64,7 +63,6 @@ export default function ChatRoom() {
         if (orderError) throw orderError;
         setOrder(orderData);
 
-        // Haal Berichten op
         const { data: messagesData } = await supabase
           .from("messages")
           .select("*")
@@ -73,7 +71,6 @@ export default function ChatRoom() {
 
         if (messagesData) setMessages(messagesData);
 
-        // Live Websocket voor real-time berichten
         const uniqueChannelName = `room_${id}_${Date.now()}`;
         activeChannel = supabase.channel(uniqueChannelName);
         
@@ -86,7 +83,6 @@ export default function ChatRoom() {
               setMessages((prev) => {
                 const alreadyExists = prev.some(m => m.id === incoming.id);
                 if (alreadyExists) return prev;
-                // Verwijder het tijdelijke 'optimistic' bericht om dubbele weergave te voorkomen
                 const filtered = prev.filter(m => !(m.id.startsWith('temp_') && m.text === incoming.text));
                 return [...filtered, incoming];
               });
@@ -110,9 +106,6 @@ export default function ChatRoom() {
     };
   }, [params?.id, router]);
 
-  // ==========================================
-  // TOP 1% LOGICA: BERICHT VERZENDEN & NOTIFY
-  // ==========================================
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault(); 
     if (!newMessage.trim() || !currentUserId || !order) return;
@@ -141,7 +134,6 @@ export default function ChatRoom() {
       }]);
 
       if (partnerProfile && partnerProfile.id) {
-        // 1. Interne Notificatie (Voor het belletje in de Navbar)
         await supabase.from("notifications").insert([{
           user_id: partnerProfile.id,
           type: "chat",
@@ -150,7 +142,6 @@ export default function ChatRoom() {
           link: `/inbox/${order.id}`
         }]);
 
-        // 2. Externe E-mail engine afvuren via de achterdeur
         fetch("/api/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -162,7 +153,7 @@ export default function ChatRoom() {
             messagePreview: messageText.length > 50 ? messageText.substring(0, 50) + "..." : messageText,
             actionUrl: `/inbox/${order.id}`
           }),
-        }).catch(err => console.error("E-mail engine kon niet worden gestart:", err));
+        }).catch(err => console.error("E-mail engine fout:", err));
       }
     } catch (error) {
       console.error("Bericht verzenden mislukt:", error);
@@ -170,33 +161,24 @@ export default function ChatRoom() {
   };
 
   // ==========================================
-  // HANDELS-LOGICA: ACCEPTEER / WIJS AF (NATURA)
+  // LOGICA 1: ACCEPTEER NATURA RUIL
   // ==========================================
-  const handleTradeAction = async (action: 'accepted' | 'rejected') => {
+  const handleAcceptTrade = async () => {
     setIsUpdatingStatus(true);
     try {
-      // Genereer direct de cryptografische QR-code als de boer accepteert
-      const qrCode = action === 'accepted' ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
-      
-      const updatePayload: any = { status: action };
-      if (qrCode) updatePayload.qr_release_code = qrCode;
+      const qrCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const updatePayload: any = { status: 'accepted', qr_release_code: qrCode };
 
       const { error: orderError } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
       if (orderError) throw orderError;
 
-      // Als geaccepteerd: Voorraad reserveren (nog niet definitief afgehandeld!)
-      if (action === 'accepted') {
-        const { data: batch } = await supabase.from('batches').select('reserved').eq('id', order.batch_id).single();
-        if (batch) {
-          const newReserved = batch.reserved + (order.amount || 1);
-          await supabase.from('batches').update({ reserved: newReserved }).eq('id', order.batch_id);
-        }
+      const { data: batch } = await supabase.from('batches').select('reserved').eq('id', order.batch_id).single();
+      if (batch) {
+        const newReserved = batch.reserved + (order.amount || 1);
+        await supabase.from('batches').update({ reserved: newReserved }).eq('id', order.batch_id);
       }
 
-      // Stuur een onzichtbaar Systeem-bericht in de chat
-      const systemText = action === 'accepted' 
-        ? "✅ De maker heeft dit ruilvoorstel geaccepteerd! De eenheden zijn gereserveerd. De koper heeft nu een afhaal-QR code in zijn dashboard. Scan deze bij de overdracht om de ruil definitief af te ronden."
-        : "❌ De maker heeft dit ruilvoorstel afgewezen. Dit kanaal wordt gesloten.";
+      const systemText = "✅ De maker heeft dit ruilvoorstel geaccepteerd! De eenheden zijn gereserveerd. De koper heeft nu een afhaal-QR code in zijn dashboard. Scan deze bij de overdracht om de ruil definitief af te ronden.";
 
       await supabase.from("messages").insert([{
         order_id: order.id,
@@ -206,10 +188,60 @@ export default function ChatRoom() {
       }]);
 
       setOrder({ ...order, ...updatePayload });
-
     } catch (error) {
-      console.error("Fout bij updaten handelsverzoek:", error);
-      alert("Netwerkfout bij het verwerken van je keuze.");
+      alert("Netwerkfout bij het accepteren.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // ==========================================
+  // LOGICA 2: UNIVERSELE NOODREM (Annuleren)
+  // ==========================================
+  const handleAbortTransaction = async () => {
+    if (!confirm("Weet je zeker dat je deze transactie wilt afbreken? Dit kan niet ongedaan worden gemaakt.")) return;
+    setIsUpdatingStatus(true);
+    
+    try {
+      // SITUATIE A: Het is nog maar een voorstel (Niks gereserveerd)
+      if (order.status === 'pending') {
+        const newStatus = isSeller ? 'rejected' : 'cancelled';
+        await supabase.from('orders').update({ status: newStatus }).eq('id', order.id);
+
+        const sysText = isSeller 
+          ? "❌ De maker heeft dit ruilvoorstel afgewezen. Dit kanaal wordt gesloten."
+          : "❌ De koper heeft het ruilvoorstel ingetrokken. Dit kanaal wordt gesloten.";
+
+        await supabase.from("messages").insert([{
+          order_id: order.id,
+          sender_id: "00000000-0000-0000-0000-000000000000",
+          sender_name: "Systeem",
+          text: sysText
+        }]);
+
+        setOrder({ ...order, status: newStatus });
+      } 
+      // SITUATIE B: Voorraad is al geclaimd of geld zit in de kluis
+      else {
+        const response = await fetch("/api/orders/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id, actionBy: currentUserName }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+
+        // Update de frontend weergave
+        setOrder({ 
+          ...order, 
+          status: "cancelled", 
+          escrow_status: order.trade_type === 'fiat' ? "refunded" : "cancelled" 
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Er ging iets mis bij het annuleren: " + err.message);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -229,9 +261,6 @@ export default function ChatRoom() {
   const isSeller = currentUserName === order.seller_name;
   const partnerName = isSeller ? order.buyer_name : order.seller_name;
   
-  // ==========================================
-  // BEVRIEZINGS LOGICA (Wanneer sluit de chat?)
-  // ==========================================
   const isFrozen = 
     ['rejected', 'disputed', 'cancelled'].includes(order.status) || 
     (order.trade_type === 'fiat' && order.escrow_status === 'released') || 
@@ -247,9 +276,7 @@ export default function ChatRoom() {
   return (
     <main className="min-h-[calc(100vh-69px)] bg-slate-50 text-slate-900 flex flex-col lg:grid lg:grid-cols-12 flex-grow">
       
-      {/* ======================================= */}
       {/* LINKERKANT: HET LIVE CHAT SCHERM */}
-      {/* ======================================= */}
       <div className="lg:col-span-8 flex flex-col h-[75vh] lg:h-[calc(100vh-69px)] border-r border-slate-200 bg-slate-50/50">
         
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center justify-between shadow-sm z-10">
@@ -328,9 +355,7 @@ export default function ChatRoom() {
 
       </div>
 
-      {/* ======================================= */}
-      {/* RECHTERKANT: CONTEXT & COMMAND CENTER    */}
-      {/* ======================================= */}
+      {/* RECHTERKANT: CONTEXT & COMMAND CENTER */}
       <div className="lg:col-span-4 bg-white border-l border-slate-200 p-6 md:p-8 space-y-6 flex flex-col justify-between h-auto lg:h-[calc(100vh-69px)] overflow-y-auto relative">
         <div className="space-y-6">
           
@@ -338,7 +363,7 @@ export default function ChatRoom() {
             <div className="flex justify-between items-start mb-2">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Informatie & Context</h3>
               
-              {/* SLIMME STATUS INDICATOR BADGE (100% Afgestemd op de nieuwe flow) */}
+              {/* SLIMME STATUS INDICATOR BADGE */}
               {order.status === 'disputed' ? (
                 <span className="bg-red-50 text-red-700 border border-red-200 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm flex items-center gap-1">🚨 Claim Geopend</span>
               ) : ['rejected', 'cancelled'].includes(order.status) ? (
@@ -396,41 +421,60 @@ export default function ChatRoom() {
             </div>
           </div>
           
-          {/* ACTIE VEREIST: De boer moet accepteren of weigeren */}
-          {isSeller && order.trade_type === 'trade' && order.status === 'pending' && (
+          {/* DE NOODREMMEN & ACTIES */}
+          {!isFrozen && (
             <div className="pt-6 border-t border-slate-200 space-y-3 animate-in fade-in slide-in-from-bottom-4">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2 text-center">Jouw Beslissing</h3>
-              <button 
-                disabled={isUpdatingStatus}
-                onClick={() => handleTradeAction('accepted')} 
-                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2"
-              >
-                {isUpdatingStatus ? "Verwerken..." : "✅ Accepteer Ruilakkoord"}
-              </button>
-              <button 
-                disabled={isUpdatingStatus}
-                onClick={() => handleTradeAction('rejected')}
-                className="w-full bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-200 font-bold uppercase tracking-widest text-xs py-3.5 rounded-xl transition-all shadow-sm"
-              >
-                Wijs Af
-              </button>
-              <p className="text-[9px] text-slate-400 text-center font-medium leading-relaxed pt-2">
-                Bij acceptatie wordt de voorraad direct gereserveerd. Je scant daarna de QR-code van de koper om af te ronden.
-              </p>
-            </div>
-          )}
+              
+              {/* Acties als we WACHTEN op antwoord */}
+              {order.status === 'pending' && (
+                <>
+                  {isSeller ? (
+                    <>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2 text-center">Jouw Beslissing</h3>
+                      <button 
+                        disabled={isUpdatingStatus}
+                        onClick={handleAcceptTrade} 
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all shadow-md flex justify-center items-center gap-2"
+                      >
+                        {isUpdatingStatus ? "Verwerken..." : "✅ Accepteer Ruilakkoord"}
+                      </button>
+                      <button 
+                        disabled={isUpdatingStatus}
+                        onClick={handleAbortTransaction}
+                        className="w-full bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-200 font-bold uppercase tracking-widest text-xs py-3.5 rounded-xl transition-all shadow-sm"
+                      >
+                        Wijs Af
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      disabled={isUpdatingStatus}
+                      onClick={handleAbortTransaction}
+                      className="w-full bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 hover:border-red-200 font-bold uppercase tracking-widest text-xs py-4 rounded-xl transition-all shadow-sm"
+                    >
+                      Trek Aanbod In
+                    </button>
+                  )}
+                </>
+              )}
 
-          {/* LOPENDE ZAKEN: De Natura Ruil is geaccepteerd, wacht op scan */}
-          {order.trade_type === 'trade' && order.status === 'accepted' && !isFrozen && (
-             <div className="pt-6 border-t border-slate-200 space-y-3 animate-in fade-in slide-in-from-bottom-4 text-center">
-               <span className="text-3xl block mb-2">🤝</span>
-               <h3 className="text-sm font-black text-emerald-700 uppercase tracking-widest">Ruil is Geaccepteerd</h3>
-               <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                 Spreek hier een tijdstip af om fysiek af te spreken. 
-                 <br/><br/>
-                 <strong className="text-slate-700">Let op (Voor de Maker):</strong> Scan de QR-code van de koper in je dashboard bij de overdracht om deze transactie cryptografisch te verzegelen.
-               </p>
-             </div>
+              {/* Acties als de boel al LOPENDE is (Natura is geaccepteerd OF Fiat zit in de kluis) */}
+              {(order.status === 'accepted' || order.escrow_status === 'held') && (
+                <div className="space-y-4 pt-2">
+                  <p className="text-[10px] text-slate-400 text-center font-medium leading-relaxed">
+                    Komen jullie er fysiek toch niet uit? Breek de transactie dan veilig af. De voorraad wordt direct teruggegeven.
+                  </p>
+                  <button 
+                    disabled={isUpdatingStatus}
+                    onClick={handleAbortTransaction}
+                    className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 font-black uppercase tracking-widest text-xs py-4 rounded-xl transition-all shadow-sm"
+                  >
+                    🚨 Transactie Afbreken
+                  </button>
+                </div>
+              )}
+
+            </div>
           )}
 
         </div>
