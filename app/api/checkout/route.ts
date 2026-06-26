@@ -2,29 +2,32 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
-// 1. Initialiseer de Motoren
+// 1. Initialiseer Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, { apiVersion: "2026-05-27.dahlia" as any });
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+
+// TOP 1% FIX: Hier zit het geheim! We gebruiken de ADMIN key in plaats van de ANON key.
+// Hiermee omzeilt de server de RLS blokkade en kan de kassa ALTIJD de order opslaan.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(req: Request) {
   try {
     const { batchId, buyerId, buyerName, reserveAmount } = await req.json();
 
-    // 2. Haal de batch veilig op vanuit de server (voorkomt prijs-hacking door de koper)
-    const { data: batch, error: batchError } = await supabase.from("batches").select("*").eq("id", batchId).single();
+    const { data: batch, error: batchError } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchError || !batch) throw new Error("Batch niet gevonden of geblokkeerd.");
 
-    // 3. De Wiskunde (Het 0/5 Model)
-    // Converteer de prijs (bijv "50,00" of "50") naar zuivere centen voor Stripe
     const rawPrice = parseFloat(batch.price.toString().replace(',', '.').replace(/[^0-9.]/g, ''));
     const unitPriceInCents = Math.round(rawPrice * 100); 
     const subTotalInCents = unitPriceInCents * reserveAmount;
     
-    // 5% Platform Fee (Jouw winst)
+    // 5% Platform Fee 
     const platformFeeInCents = Math.round(subTotalInCents * 0.05);
 
-    // 4. Maak de Order aan in Supabase (Status: Wachten op betaling)
-    const { data: order, error: orderError } = await supabase.from("orders").insert([{
+    // Let op: We gebruiken hier supabaseAdmin om de RLS beveiliging te passeren
+    const { data: order, error: orderError } = await supabaseAdmin.from("orders").insert([{
       batch_id: batch.id,
       buyer_id: buyerId,
       buyer_name: buyerName,
@@ -38,8 +41,7 @@ export async function POST(req: Request) {
 
     if (orderError) throw orderError;
 
-    // 5. Bouw de Stripe Checkout Sessie (iDEAL, Bancontact, Creditcard)
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.projekster.com';
     
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['ideal', 'bancontact', 'card'],
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
             product_data: { name: `Oogst: ${batch.title} (${reserveAmount} ${batch.unit || 'stuks'})` },
             unit_amount: unitPriceInCents,
           },
-          quantity: reserveAmount, // Laat Stripe de wiskunde doen
+          quantity: reserveAmount,
         },
         {
           price_data: {
@@ -61,13 +63,12 @@ export async function POST(req: Request) {
             },
             unit_amount: platformFeeInCents,
           },
-          quantity: 1, // Vaste fee per reservering
+          quantity: 1, 
         }
       ],
       mode: 'payment',
-      // We koppelen het Order ID aan de URL zodat we weten wat er betaald is
       success_url: `${origin}/api/checkout/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
-      cancel_url: `${origin}/batch/${batch.id}`, // Terug naar de batch als ze weigeren
+      cancel_url: `${origin}/batch/${batch.id}`,
       metadata: { order_id: order.id, batch_id: batch.id }
     });
 
