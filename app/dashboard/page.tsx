@@ -18,13 +18,12 @@ interface Batch {
 }
 
 interface Order {
-  id: string; batch_id: string; buyer_name: string; seller_name: string;
+  id: string; batch_id: string; buyer_name: string; seller_name: string; buyer_id: string;
   batch_title: string; amount: number; trade_type: string; trade_offer?: string;
   status: 'pending' | 'accepted' | 'completed' | 'rejected' | 'disputed' | 'cancelled';
   escrow_status?: string; qr_release_code?: string; created_at: string;
 }
 
-// Helper: Vertaalt de VAPID sleutel voor de browser
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -60,10 +59,8 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
-  // De Nieuwe 5-Zuil Navigatie
+  // Navigatie & Modals
   const [viewMode, setViewMode] = useState<"actie" | "lopend" | "voorraad" | "archief" | "instellingen">("actie");
-  
-  // Modals
   const [batchToDelete, setBatchToDelete] = useState<Batch | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [qrOrder, setQrOrder] = useState<Order | null>(null);
@@ -102,7 +99,7 @@ export default function Dashboard() {
           const { data: outOrdersData } = await supabase.from("orders").select("*").eq("buyer_id", session.user.id).order("created_at", { ascending: false });
           if (outOrdersData) setOutgoingOrders(outOrdersData);
 
-          // Verificatie Check (Terugkomst van Stripe KYC)
+          // Stripe KYC Verificatie
           const searchParams = new URLSearchParams(window.location.search);
           const activeStripeId = profileData?.stripe_account_id || "";
           if (searchParams.get("onboarding") === "success" && activeStripeId) {
@@ -111,14 +108,8 @@ export default function Dashboard() {
                method: "POST", headers: { "Content-Type": "application/json" },
                body: JSON.stringify({ accountId: activeStripeId, userId: session.user.id })
              }).then(res => res.json()).then(verifyData => {
-               if (verifyData.success) { 
-                 setStripeOnboarded(true); 
-                 router.replace('/dashboard'); 
-               } 
-               else { 
-                 // We doen even geen harde alert meer, de gebruiker ziet de statusknop.
-                 router.replace('/dashboard'); 
-               }
+               if (verifyData.success) { setStripeOnboarded(true); router.replace('/dashboard'); } 
+               else { router.replace('/dashboard'); }
              }).catch(err => console.error("Verificatie fout:", err));
           }
         }
@@ -129,9 +120,8 @@ export default function Dashboard() {
   }, [router]);
 
   // ==========================================
-  // 3. SLIMME FILTER LOGICA (De 4 Tabbladen)
+  // 3. SLIMME FILTER LOGICA
   // ==========================================
-  
   const actionRequiredIn = incomingOrders.filter(o => o.trade_type === 'trade' && o.status === 'pending');
   const actionRequiredOut = outgoingOrders.filter(o => o.trade_type === 'trade' && o.status === 'pending');
   const totalActions = actionRequiredIn.length;
@@ -140,53 +130,77 @@ export default function Dashboard() {
   const ongoingOut = outgoingOrders.filter(o => (o.trade_type === 'fiat' && o.escrow_status === 'held') || (o.trade_type === 'trade' && o.status === 'accepted'));
   const totalOngoing = ongoingIn.length + ongoingOut.length;
 
-  const archivedIn = incomingOrders.filter(o => ['rejected', 'disputed', 'cancelled'].includes(o.status) || (o.trade_type === 'fiat' && o.escrow_status === 'released') || (o.trade_type === 'trade' && o.status === 'completed'));
-  const archivedOut = outgoingOrders.filter(o => ['rejected', 'disputed', 'cancelled'].includes(o.status) || (o.trade_type === 'fiat' && o.escrow_status === 'released') || (o.trade_type === 'trade' && o.status === 'completed'));
+  // Let op de toevoeging van 'refunded' en 'cancelled' statussen om ze correct te archiveren
+  const archivedIn = incomingOrders.filter(o => ['rejected', 'disputed', 'cancelled'].includes(o.status) || (o.trade_type === 'fiat' && ['released', 'refunded', 'cancelled'].includes(o.escrow_status || '')) || (o.trade_type === 'trade' && o.status === 'completed'));
+  const archivedOut = outgoingOrders.filter(o => ['rejected', 'disputed', 'cancelled'].includes(o.status) || (o.trade_type === 'fiat' && ['released', 'refunded', 'cancelled'].includes(o.escrow_status || '')) || (o.trade_type === 'trade' && o.status === 'completed'));
 
   // ==========================================
-  // 4. TRANSACTIE LOGICA & AUTO-ROLLBACK
+  // 4. WATERDICHTE TRANSACTIE LOGICA 2.0
   // ==========================================
+
+  // NATURA ACCEPTEREN OF WEIGEREN (Direct in dashboard)
   const handleTradeAction = async (order: Order, action: 'accepted' | 'rejected') => {
     setIsUpdatingStatus(true);
     try {
-      const qrCode = action === 'accepted' ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
-      const updatePayload: any = { status: action };
-      if (qrCode) updatePayload.qr_release_code = qrCode;
-
-      const { error } = await supabase.from('orders').update(updatePayload).eq('id', order.id);
-      if (error) throw error;
-
-      if (action === 'accepted') {
-        const { data: batch } = await supabase.from('batches').select('reserved').eq('id', order.batch_id).single();
+      if (action === 'rejected') {
+        await supabase.from('orders').update({ status: 'rejected' }).eq('id', order.id);
+        await supabase.from("messages").insert([{ order_id: order.id, sender_id: "00000000-0000-0000-0000-000000000000", sender_name: "Systeem", text: "❌ De maker heeft dit ruilvoorstel afgewezen." }]);
+      } else {
+        // ACCEPT LOGICA (Met Spookvoorraad Beveiliging)
+        const { data: batch } = await supabase.from('batches').select('reserved, total').eq('id', order.batch_id).single();
         if (batch) {
-          await supabase.from('batches').update({ reserved: batch.reserved + (order.amount || 1) }).eq('id', order.batch_id);
+          const available = batch.total - (batch.reserved || 0);
+          if (order.amount > available) {
+            alert(`Fout: Je hebt niet genoeg vrije voorraad meer om dit verzoek in te willigen. Je hebt er nog ${available} vrij.`);
+            setIsUpdatingStatus(false); return;
+          }
+          const qrCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          await supabase.from('orders').update({ status: 'accepted', qr_release_code: qrCode }).eq('id', order.id);
+          await supabase.from('batches').update({ reserved: batch.reserved + order.amount }).eq('id', order.batch_id);
+          
+          await supabase.from("messages").insert([{ order_id: order.id, sender_id: "00000000-0000-0000-0000-000000000000", sender_name: "Systeem", text: "✅ De maker heeft dit ruilvoorstel geaccepteerd! De eenheden zijn gereserveerd. De koper heeft nu een afhaal-QR code in zijn dashboard." }]);
+          
+          setMyBatches(prev => prev.map(b => b.id === order.batch_id ? { ...b, reserved: b.reserved + order.amount } : b));
         }
       }
-      setIncomingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: action, qr_release_code: qrCode || o.qr_release_code } : o));
+      setIncomingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: action } : o));
     } catch (err) { alert("Netwerkfout."); } 
     finally { setIsUpdatingStatus(false); }
   };
 
-  const handleDisputeCancel = async (order: Order) => {
-    if (!confirm("Weet je zeker dat je deze overdracht wilt annuleren? De gereserveerde eenheden worden direct teruggegeven aan de online voorraad van de maker.")) return;
+  // UNIVERSELE NOODREM (Werkt voor Koper, Maker, Fiat en Natura)
+  const handleAbortTransaction = async (order: Order) => {
+    if (!confirm("Weet je zeker dat je deze transactie wilt afbreken? Alle betrokken voorraad wordt direct vrijgegeven en (indien Fiat) wordt de Stripe refund ingeschakeld.")) return;
     setIsUpdatingStatus(true);
+    
     try {
-      const { data: batch } = await supabase.from('batches').select('reserved').eq('id', order.batch_id).single();
-      if (batch) {
-        const newReserved = Math.max(0, batch.reserved - (order.amount || 1));
-        await supabase.from('batches').update({ reserved: newReserved }).eq('id', order.batch_id);
-      }
-      await supabase.from('orders').update({
-        status: 'disputed',
-        dispute_reason: 'Geannuleerd tijdens overdracht',
-        cancelled_by: currentUserId
-      }).eq('id', order.id);
+      if (order.status === 'pending') {
+        // Alleen een natura verzoek intrekken
+        const newStatus = currentUserId === order.buyer_id ? 'cancelled' : 'rejected';
+        await supabase.from('orders').update({ status: newStatus }).eq('id', order.id);
+        
+        await supabase.from("messages").insert([{ order_id: order.id, sender_id: "00000000-0000-0000-0000-000000000000", sender_name: "Systeem", text: `❌ Transactie geannuleerd door ${makerName}.` }]);
+        
+        setIncomingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: newStatus } : o));
+        setOutgoingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: newStatus } : o));
+      } else {
+        // Harde Backend Noodrem voor LOPENDE zaken
+        const response = await fetch("/api/orders/refund", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id, actionBy: makerName || "Gebruiker" }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
 
-      setOutgoingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'disputed' } : o));
-      setIncomingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'disputed' } : o));
-      
-      alert(order.trade_type === 'fiat' ? "Annulering vastgelegd. De Escrow beheerder kijkt mee voor restitutie." : "Natura ruil geannuleerd en voorraad vrijgegeven.");
-    } catch(err) { alert("Fout bij annuleren."); }
+        // Update lokale arrays zodat de UI direct reageert
+        const finalEscrow = order.trade_type === 'fiat' ? 'refunded' : 'cancelled';
+        setIncomingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled', escrow_status: finalEscrow } : o));
+        setOutgoingOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled', escrow_status: finalEscrow } : o));
+        setMyBatches(prev => prev.map(b => b.id === order.batch_id ? { ...b, reserved: Math.max(0, b.reserved - order.amount) } : b));
+        
+        alert("Succes: Transactie veilig afgebroken en voorraad hersteld.");
+      }
+    } catch (err: any) { alert("Fout bij annuleren: " + err.message); }
     finally { setIsUpdatingStatus(false); }
   };
 
@@ -202,7 +216,7 @@ export default function Dashboard() {
   };
 
   // ==========================================
-  // INSTELLINGEN & STRIPE
+  // INSTELLINGEN & STRIPE LOGICA
   // ==========================================
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);
@@ -219,7 +233,6 @@ export default function Dashboard() {
     finally { setIsConnectingStripe(false); }
   };
 
-  // NIEUW: Forceer verificatie ophalen als Stripe de automatische redirect miste
   const forceVerifyStatus = async () => {
     if (!stripeAccountId) return alert("Geen Stripe account gekoppeld.");
     setIsConnectingStripe(true);
@@ -229,17 +242,10 @@ export default function Dashboard() {
         body: JSON.stringify({ accountId: stripeAccountId, userId: currentUserId })
       });
       const data = await res.json();
-      if (data.success) {
-        setStripeOnboarded(true);
-        alert("Geweldig! Je KYC status is geverifieerd door Stripe. De kassa is open.");
-      } else {
-        alert("Stripe is je account nog aan het controleren of er ontbreken gegevens. Duik even in het dashboard via de knop 'Naar Stripe Dashboard'.");
-      }
-    } catch(err) {
-      alert("Kon status niet ophalen.");
-    } finally {
-      setIsConnectingStripe(false);
-    }
+      if (data.success) { setStripeOnboarded(true); alert("Geweldig! KYC status geverifieerd."); } 
+      else { alert("Stripe controleert je gegevens nog. Check je Stripe dashboard."); }
+    } catch(err) { alert("Kon status niet ophalen."); } 
+    finally { setIsConnectingStripe(false); }
   };
 
   const handleStripeLogin = async () => {
@@ -265,7 +271,6 @@ export default function Dashboard() {
   };
 
   const toggleNotification = async (type: 'email' | 'push') => {
-    // [CODE BLIJFT HETZELFDE]
     try {
       if (type === 'email') {
         const newValue = !emailAlerts;
@@ -317,7 +322,7 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 pt-8 relative">
       
-      {/* MODALS VERBORGEN VOOR BEKNOPTHEID, CODE BLIJFT IDENTIEK */}
+      {/* MODALS */}
       {qrOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl relative flex flex-col items-center">
@@ -347,7 +352,6 @@ export default function Dashboard() {
 
       <div className="max-w-[1400px] mx-auto px-4 md:px-6">
         
-        {/* HEADER & TABS */}
         <div className="flex flex-col gap-8 mb-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
@@ -362,7 +366,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-2 border-b border-slate-200 pb-0 overflow-x-auto scrollbar-none">
-            {/* TABS BLIJVEN HETZELFDE */}
             <button onClick={() => setViewMode("actie")} className={`whitespace-nowrap px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${viewMode === "actie" ? "text-amber-600" : "text-slate-400 hover:text-slate-600"}`}>
               🔴 Actie Vereist {totalActions > 0 && <span className="ml-2 bg-red-500 text-white px-2 py-0.5 rounded-full">{totalActions}</span>}
               {viewMode === "actie" && <div className="absolute bottom-0 left-0 w-full h-[3px] bg-amber-500"></div>}
@@ -386,7 +389,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* VIEW 1, 2, 3 en 4 VERBORGEN VOOR BEKNOPTHEID, DEZE BLIJVEN 100% IDENTIEK */}
         {viewMode === "actie" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
             <div>
@@ -394,28 +396,34 @@ export default function Dashboard() {
               {actionRequiredIn.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {actionRequiredIn.map(order => (
-                    <div key={order.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 shadow-sm">
+                    <div key={order.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 shadow-sm flex flex-col">
                       <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1">🔄 Nieuw Ruilvoorstel</p>
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">{order.batch_title}</h3>
-                      <p className="text-sm text-slate-700 font-medium mb-4 italic">"{order.trade_offer}" - <strong className="not-italic text-slate-900">{order.buyer_name}</strong></p>
-                      <div className="flex gap-2">
-                        <button disabled={isUpdatingStatus} onClick={() => handleTradeAction(order, 'accepted')} className="w-1/2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest py-3 rounded-xl shadow-md">Accepteren</button>
-                        <button disabled={isUpdatingStatus} onClick={() => handleTradeAction(order, 'rejected')} className="w-1/2 bg-white text-slate-600 hover:text-red-600 text-xs font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-300">Weigeren</button>
+                      <h3 className="text-lg font-bold text-slate-900 mb-2">{order.batch_title} ({order.amount}x)</h3>
+                      <p className="text-sm text-slate-700 font-medium mb-6 italic">"{order.trade_offer}" - <strong className="not-italic text-slate-900">{order.buyer_name}</strong></p>
+                      <div className="mt-auto flex flex-col gap-2">
+                        <button disabled={isUpdatingStatus} onClick={() => handleTradeAction(order, 'accepted')} className="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-widest py-3 rounded-xl shadow-md">Accepteren</button>
+                        <button disabled={isUpdatingStatus} onClick={() => handleTradeAction(order, 'rejected')} className="w-full bg-white text-slate-600 hover:text-red-600 text-xs font-bold uppercase tracking-widest py-3 rounded-xl border border-slate-300">Weigeren</button>
+                        <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-transparent text-slate-500 hover:text-slate-800 text-[10px] font-bold uppercase tracking-widest py-2">💬 Overleggen in Chat</button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : <p className="text-sm text-slate-500 font-medium">Je bent helemaal bij. Geen acties vereist.</p>}
             </div>
+            
             <div className="pt-8 border-t border-slate-200">
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-6">Uitgaande Verzoeken (Als Koper)</h2>
               {actionRequiredOut.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {actionRequiredOut.map(order => (
-                    <div key={order.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <div key={order.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">⏳ Wachten op: {order.seller_name}</p>
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">{order.batch_title}</h3>
-                      <p className="text-sm text-slate-500 font-medium">Je ruilvoorstel is verzonden.</p>
+                      <h3 className="text-lg font-bold text-slate-900 mb-2">{order.batch_title} ({order.amount}x)</h3>
+                      <p className="text-sm text-slate-500 font-medium mb-4">Je ruilvoorstel is verzonden.</p>
+                      <div className="mt-auto flex flex-col gap-2">
+                        <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-white border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-widest py-3 rounded-xl">💬 Open Chat</button>
+                        <button disabled={isUpdatingStatus} onClick={() => handleAbortTransaction(order)} className="w-full mt-1 text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-widest">Aanbod Intrekken</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -425,13 +433,12 @@ export default function Dashboard() {
         )}
 
         {viewMode === "lopend" && (
-           // LOPENDE ZAKEN BLIJFT IDENTIEK AAN ORIGINEEL
            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
             <div className="bg-blue-50 border border-blue-200 p-5 rounded-xl flex gap-3 text-sm text-blue-800 font-medium">
               <span className="text-xl">ℹ️</span>
               <p>Dit is de wachtkamer voor overdracht. <strong>Kopers</strong> tonen hier hun QR-code. <strong>Makers</strong> scannen deze QR-code om de deal cryptografisch te verzegelen en (indien Fiat) de betaling vrij te geven.</p>
             </div>
-            {/* LOPENDE IN/OUT MAPPINGS */}
+            
             <div>
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-6">Jouw Verkopen (Jij moet scannen)</h2>
               {ongoingIn.length > 0 ? (
@@ -443,6 +450,8 @@ export default function Dashboard() {
                       <div className="mt-auto flex flex-col gap-2">
                         <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl transition-all">💬 Open Chat</button>
                         <button onClick={() => router.push(`/scan/${order.id}`)} className="w-full bg-slate-900 hover:bg-slate-800 text-emerald-400 text-xs font-black uppercase tracking-widest py-3.5 rounded-xl transition-all flex items-center justify-center gap-2"><span>📷</span> Scan Afhaal-QR</button>
+                        {/* DE NIEUWE NOODREM VOOR DE VERKOPER */}
+                        <button disabled={isUpdatingStatus} onClick={() => handleAbortTransaction(order)} className="w-full mt-2 text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-widest text-center">🚨 Transactie Afbreken</button>
                       </div>
                     </div>
                   ))}
@@ -461,7 +470,8 @@ export default function Dashboard() {
                       <div className="mt-auto flex flex-col gap-2">
                         <button onClick={() => setQrOrder(order)} className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2"><span>📱</span> Toon Afhaal-QR</button>
                         <button onClick={() => router.push(`/inbox/${order.id}`)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-widest py-3.5 rounded-xl">💬 Open Chat</button>
-                        <button disabled={isUpdatingStatus} onClick={() => handleDisputeCancel(order)} className="w-full mt-2 text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-widest">🚨 Annuleer / Open Claim</button>
+                        {/* DE NOODREM VOOR DE KOPER */}
+                        <button disabled={isUpdatingStatus} onClick={() => handleAbortTransaction(order)} className="w-full mt-2 text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-widest text-center">🚨 Transactie Afbreken</button>
                       </div>
                     </div>
                   ))}
@@ -471,17 +481,32 @@ export default function Dashboard() {
            </div>
         )}
 
+        {/* SPOOKVOORRAAD HUD IN "MIJN VOORRAAD" TAB
+            Dit is de expliciete weergave van wat er vrij/gereserveerd is.
+        */}
         {viewMode === "voorraad" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
             {myBatches.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
                 {myBatches.map((batch) => (
                   <div key={batch.id} className="relative group h-full">
+                    
+                    {/* VISUELE HUD VOOR DE BOER: Duidelijk overzicht van Gereserveerd vs Vrij */}
+                    {batch.reserved > 0 && (
+                      <div className="absolute top-3 left-3 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg z-40 shadow-md">
+                        {batch.reserved} Gereserveerd
+                      </div>
+                    )}
+                    <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg z-40 shadow-sm">
+                      {batch.total - (batch.reserved || 0)} Vrij
+                    </div>
+
                     <BatchCard {...batch} daysLeft={batch.days_left} />
+                    
                     <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl flex flex-col items-center justify-center p-5 gap-3 border border-slate-200 shadow-inner">
                       <button onClick={() => router.push(`/bewerk-batch/${batch.id}`)} className="w-full bg-white border border-slate-300 text-slate-700 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl shadow-sm">Bewerken</button>
                       {batch.reserved > 0 ? (
-                        <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl"><span>🔒</span> Geblokkeerd</button>
+                        <button disabled className="w-full bg-slate-100 border border-slate-200 text-slate-400 text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl flex items-center justify-center gap-1"><span>🔒</span> Beveiligd</button>
                       ) : (
                         <button onClick={() => setBatchToDelete(batch)} className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-[10px] font-bold uppercase tracking-widest py-3.5 rounded-xl transition-colors">Verwijderen</button>
                       )}
@@ -499,7 +524,6 @@ export default function Dashboard() {
         )}
 
         {viewMode === "archief" && (
-          // ARCHIEF BLIJFT IDENTIEK
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
              <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
                <div className="overflow-x-auto">
@@ -525,7 +549,8 @@ export default function Dashboard() {
                          <td className="px-6 py-4">
                            {['completed'].includes(order.status) && <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">✅ Succes</span>}
                            {['rejected', 'cancelled'].includes(order.status) && <span className="bg-slate-100 text-slate-500 border border-slate-300 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">Geannuleerd</span>}
-                           {['disputed'].includes(order.status) && <span className="bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">🚨 Claim Geopend</span>}
+                           {['disputed'].includes(order.status) && <span className="bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">🚨 Claim</span>}
+                           {order.escrow_status === 'refunded' && <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">Teruggestort</span>}
                          </td>
                        </tr>
                      ))}
@@ -539,14 +564,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ========================================================== */}
-        {/* VIEW 5: INSTELLINGEN & KYC (OPGESCHOOND & VERBETERD)       */}
-        {/* ========================================================== */}
         {viewMode === "instellingen" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8 max-w-4xl">
             
-            {/* LET OP: De grote gele 'Actie Vereist' banner is hier verwijderd voor een strakker overzicht! */}
-
             <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
                <div className="flex items-center gap-3 mb-2">
                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl border border-blue-100">🏦</div>
