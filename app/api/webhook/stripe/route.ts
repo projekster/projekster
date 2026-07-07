@@ -17,7 +17,10 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 export async function POST(req: Request) {
   // Stripe vereist de ruwe tekst van het verzoek om de cryptografische handtekening te controleren
   const body = await req.text();
-  const signature = headers().get("stripe-signature");
+  
+  // FIX: headers() is een asynchrone functie in Next.js 15+, we gebruiken nu 'await'
+  const headersList = await headers();
+  const signature = headersList.get("stripe-signature");
 
   if (!signature) {
     return NextResponse.json({ error: "Geen Stripe handtekening gevonden." }, { status: 400 });
