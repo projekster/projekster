@@ -108,7 +108,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
 
   // --- NATURA RUILVOORSTEL ---
   const handleTrade = async () => {
-    if (!tradeOffer.trim()) return;
+    if (!tradeOffer.trim() || reserveAmount <= 0 || reserveAmount > (batch.total - batch.reserved)) return;
     
     setIsProcessing(true);
     try {
@@ -122,7 +122,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
         buyer_name: buyerName,
         seller_name: batch.maker,
         batch_title: batch.title,
-        amount: 1, // Standaard ruil eenheid (nooit meer de hele batch tegelijk)
+        amount: reserveAmount, // TOP 1% FIX: Natura ruil accepteert nu ook dynamische volumes!
         trade_type: "trade",
         trade_offer: tradeOffer,
         status: "pending" // Gaat de Inbox-flow in als voorstel
@@ -418,17 +418,31 @@ export default function BatchDetailClient({ id }: { id: string }) {
                   // DE NATURA RUIL UI
                   <div className="bg-white p-6 rounded-2xl border-2 border-amber-200 space-y-4 animate-in fade-in slide-in-from-bottom-4 shadow-lg">
                     <div>
-                      <h3 className="font-black text-slate-900 uppercase tracking-wide text-lg mb-1">Jouw Voorstel</h3>
-                      <p className="text-xs text-amber-600 font-medium">Beschrijf nauwkeurig wat je ter ruil aanbiedt.</p>
+                      <h3 className="font-black text-slate-900 uppercase tracking-wide text-lg mb-1">Selecteer Aantal</h3>
+                      <p className="text-xs text-amber-600 font-medium">Hoeveel {batch.unit || "eenheden"} wil je ruilen?</p>
                     </div>
                     
-                    <textarea 
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all resize-none shadow-inner"
-                      rows={4}
-                      value={tradeOffer}
-                      onChange={(e) => setTradeOffer(e.target.value)}
-                      placeholder={`Bijv: Ik heb nog 2 kuub onbehandeld eikenhout...`}
-                    ></textarea>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max={remaining}
+                      value={reserveAmount}
+                      onChange={(e) => setReserveAmount(Number(e.target.value))}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-slate-900 text-2xl font-black text-center focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all shadow-inner"
+                    />
+
+                    <div className="pt-2 border-t border-slate-100">
+                      <h3 className="font-black text-slate-900 uppercase tracking-wide text-lg mb-1">Jouw Voorstel</h3>
+                      <p className="text-xs text-amber-600 font-medium mb-3">Beschrijf nauwkeurig wat je ter ruil aanbiedt.</p>
+                      
+                      <textarea 
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all resize-none shadow-inner"
+                        rows={4}
+                        value={tradeOffer}
+                        onChange={(e) => setTradeOffer(e.target.value)}
+                        placeholder={`Bijv: Ik heb nog 2 kuub onbehandeld eikenhout...`}
+                      ></textarea>
+                    </div>
                     
                     <div className="flex gap-3 pt-2">
                       <button 
@@ -438,7 +452,7 @@ export default function BatchDetailClient({ id }: { id: string }) {
                         Annuleer
                       </button>
                       <button 
-                        disabled={!tradeOffer.trim() || isProcessing}
+                        disabled={!tradeOffer.trim() || isProcessing || reserveAmount < 1 || reserveAmount > remaining}
                         onClick={handleTrade}
                         className="w-2/3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider py-3.5 rounded-xl transition-all shadow-md text-sm flex justify-center items-center"
                       >
