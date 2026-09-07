@@ -19,12 +19,14 @@ export async function POST(req: Request) {
     const { data: batch, error: batchError } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchError || !batch) throw new Error("Batch niet gevonden of geblokkeerd.");
 
+    // AFRONDINGS-VEILIGE WISKUNDE (Fase 2.2)
     const rawPrice = parseFloat(batch.price.toString().replace(',', '.').replace(/[^0-9.]/g, ''));
     const unitPriceInCents = Math.round(rawPrice * 100); 
     const subTotalInCents = unitPriceInCents * reserveAmount;
     
-    // 5% Platform Fee 
-    const platformFeeInCents = Math.round(subTotalInCents * 0.05);
+    // SOVEREIGN MODEL: 0% Winst. Alleen harde Stripe kosten (1.5% + 35 cent)
+    // We gebruiken Math.round om te voorkomen dat er halve centen naar Stripe worden gestuurd (wat een crash veroorzaakt)
+    const stripeFeeInCents = Math.round((subTotalInCents * 0.015) + 35);
 
     // Let op: We gebruiken hier supabaseAdmin om de RLS beveiliging te passeren
     const { data: order, error: orderError } = await supabaseAdmin.from("orders").insert([{
@@ -58,10 +60,10 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'eur',
             product_data: { 
-              name: "Projekster Kluis & Netwerk Garantie",
-              description: "Beveiligde Escrow tot QR-overdracht & 100% lokaal netwerkbehoud."
+              name: "Onafhankelijke Infrastructuur",
+              description: "0% Winstmarge. Enkel de harde externe bankkosten voor de Escrow kluis."
             },
-            unit_amount: platformFeeInCents,
+            unit_amount: stripeFeeInCents,
           },
           quantity: 1, 
         }

@@ -176,11 +176,16 @@ export default function BatchDetailClient({ id }: { id: string }) {
   const remaining = batch.total - batch.reserved;
   const percentage = Math.min((batch.reserved / batch.total) * 100, 100);
 
-  // Wiskunde voor live weergave 5% Escrow fee
+  // ==========================================
+  // DE NIEUWE SOVEREIGN WISKUNDE (0% Marge)
+  // ==========================================
   const rawPrice = parseFloat(batch.price?.toString().replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
   const subTotal = rawPrice * reserveAmount;
-  const platformFee = subTotal * 0.05;
-  const totalFiat = subTotal + platformFee;
+  
+  // Enkel de harde Stripe infrastructuurkosten (1.5% + €0.35)
+  // Geen winstmarge voor Projekster.
+  const infrastructureFee = (subTotal * 0.015) + 0.35; 
+  const totalFiat = subTotal + infrastructureFee;
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 pt-8">
@@ -380,17 +385,21 @@ export default function BatchDetailClient({ id }: { id: string }) {
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 text-slate-900 text-2xl font-black text-center focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all shadow-inner"
                     />
                     
-                    {/* DE LIVE WISKUNDE (Top 1% Transparantie) */}
+                    {/* DE LIVE WISKUNDE (Transparantie) */}
                     <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm space-y-2 text-slate-600">
                        <div className="flex justify-between">
-                         <span>Goederen ({reserveAmount}x):</span> 
+                         <span>Waarde Goederen ({reserveAmount}x):</span> 
                          <span className="font-bold text-slate-900">€{subTotal.toFixed(2).replace('.', ',')}</span>
                        </div>
-                       <div className="flex justify-between text-xs">
-                         <span>Projekster Escrow (5%):</span> 
-                         <span>€{platformFee.toFixed(2).replace('.', ',')}</span>
+                       <div className="flex justify-between text-xs text-slate-500">
+                         <span>Projekster Netwerkmarge:</span> 
+                         <span>€0,00</span>
                        </div>
-                       <div className="flex justify-between pt-2 border-t border-slate-200 font-black text-slate-900">
+                       <div className="flex justify-between text-xs text-slate-400 border-b border-slate-200 pb-2">
+                         <span>Externe Kluiskosten (Stripe):</span> 
+                         <span>€{infrastructureFee.toFixed(2).replace('.', ',')}</span>
+                       </div>
+                       <div className="flex justify-between pt-2 font-black text-slate-900">
                          <span>Totaal Afrekenen:</span> 
                          <span>€{totalFiat.toFixed(2).replace('.', ',')}</span>
                        </div>
